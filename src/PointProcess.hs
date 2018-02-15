@@ -118,25 +118,17 @@ toReconstructedTree'
                              -- does not have to be calculated repeatedly.
   -> PhyloTree a
 toReconstructedTree' _ _ _  [t] = snd t
-toReconstructedTree' s o vs hts = if il+1 /= ir
-                                  then error "Ahh."
-                                  else toReconstructedTree' s o vs hts' where
+toReconstructedTree' s o vs hts = toReconstructedTree' s o vs' hts' where
   -- Fist get the next index and value.
-  (m, i) = minimumWithIndex vs
-  -- First get height and index of the trees that will be connected.
-  mins   = minimumsIndices (map fst hts)
-  (h, i1) = head mins
-  -- The heights should be the same up to machine precision.
-  (_, i2) = last mins
-  il     = minimum [i1, i2]
-  ir     = maximum [i1, i2]
-  tl     = hts !! il
-  tr     = hts !! ir
+  (h, i) = minimumWithIndex vs
+  tl     = hts !! i
+  tr     = hts !! (i+1)
   -- Now we need to find the next speciation time up the tree.
-  hll    = if il>0 then fst $ hts !! (il-1) else o
-  hrr    = if ir+1<length hts then fst $ hts !! (ir+1) else o
-  h'     = minimum [hll, hrr]
+  hl    = if i>0 then vs !! (i-1) else o
+  hr    = if i+1<length vs then vs !! (i+1) else o
+  h'     = minimum [hl, hr]
   info   = Info s (h'-h) Internal
   t      = (h', glue info [snd tl, snd tr])
   -- The list of tree heights and trees for the next call.
-  hts'    = take il hts ++ [t] ++ drop (ir+1) hts
+  hts'    = take i hts ++ [t] ++ drop (i+2) hts
+  vs'     = take i vs ++ drop (i+1) vs

@@ -37,17 +37,23 @@ import qualified Data.Text as T
 import           Data.Tree
 import qualified Tools
 
--- | The type of the node.
+-- | The type of the node. Technically, the type 'Internal' is not necessary
+-- because it can be deduced from the tree. However, it is convenient to save
+-- the type in this way.
 data PhyloNode = Internal            -- ^ Normal, internal node.
                | Extant              -- ^ Extant leaf.
                | Extinct             -- ^ Extinct leaf.
                deriving (Eq, Read, Show)
 
+-- | The node state of a phylogenetic tree. It contains a label of type 'a', the
+-- branch length to the parent node or the origin of the tree and information if
+-- the node is internal, extinct and extant..'
 data Info a = Info
   { label :: a      -- ^ The label of the node, e.g., Int or String.
   , brLn  :: Double -- ^ The branch length to the parent node or the origin.
   , node  :: PhyloNode } deriving (Show)
 
+-- | A phylogenetic tree data type. The node states are of type 'Info a'.
 type PhyloTree a = Tree (Info a)
 
 -- | Test if a tree is valid; i.e., no extant or extinct leaves at internal

@@ -22,6 +22,9 @@ reconstructed trees under the birth and death process.
 
 module BirthDeathDistribution
   ( BirthDeathDistribution(..)
+  , cumulative
+  , density
+  , quantile
   ) where
 
 import Data.Data (Data, Typeable)

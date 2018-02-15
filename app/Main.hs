@@ -9,6 +9,11 @@ import qualified Data.Text.IO as T
 
 main :: IO ()
 main = do
-  g <- create
-  trs <- replicateM 100 (simulateReconstructedTree 20 2.0 1.0 0.9 g)
+  let nTrees = 100
+      n      = 1000
+      t      = 2.0
+      l      = 1.0
+      m      = 9.0
+  g <- createSystemRandom
+  trs <- replicateM nTrees (simulateReconstructedTree n t l m g)
   T.putStr $ T.concat $ map toNewickInt trs
