@@ -20,7 +20,7 @@ module Simulate
   )
   where
 
-import Tree
+import PhyloTree
 
 import Control.Monad.Primitive
 import System.Random.MWC

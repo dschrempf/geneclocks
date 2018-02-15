@@ -17,7 +17,7 @@ module GeneTree
   , GTree
   ) where
 
-import Tree
+import PhyloTree
 import qualified Data.Text as T
 import SpeciesTree
 
@@ -29,4 +29,4 @@ type GState = (GName, SName)
 
 -- | A gene tree is a binary tree, but genes have not only names but are also
 -- associated to species.
-type GTree = Tree GState Double
+type GTree = Tree GState

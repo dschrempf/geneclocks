@@ -34,9 +34,10 @@ module PointProcess
 import qualified BirthDeathDistribution as D
 import           Control.Monad
 import           Control.Monad.Primitive
-import           Tree
+import           PhyloTree
 import qualified Statistics.Distribution as D (genContVar)
 import           System.Random.MWC
+import           Tools
 
 -- | A __point process__ for \(n\) points and of age \(t_{or}\) is defined as
 -- follows. Draw $n$ points on the horizontal axis at \(1,2,\ldots,n\). Pick
@@ -44,10 +45,10 @@ import           System.Random.MWC
 -- \(0 < s_i < t_{or}\). There is a bijection between (ranked) oriented trees
 -- and the point process. Usually, a will be 'String' (or 'Int') and b will be
 -- 'Double'.
-data PointProcess a b = PointProcess
+data PointProcess a = PointProcess
   { points :: ![a]
-  , values :: ![b]
-  , tOr    :: !b } deriving (Read, Show, Eq)
+  , values :: ![Double]
+  , origin :: !Double } deriving (Read, Show, Eq)
 
 -- | Sample a point process using the 'BirthDeathDistribution'. The names of the
 -- points will be integers.
@@ -56,8 +57,8 @@ simulate :: (PrimMonad m)
          -> Double              -- ^ Time of origin
          -> Double              -- ^ Birth rate
          -> Double              -- ^ Death rate
-         -> Gen (PrimState m)   -- ^ The generator (see 'System.Random.MWC')
-         -> m (PointProcess Int Double)
+         -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
+         -> m (PointProcess Int)
 simulate n t l m g
   | n < 1     = error "Number of samples needs to be one or larger."
   | t < 0.0   = error "Time of origin needs to be positive."
@@ -76,8 +77,8 @@ simulateReconstructedTree
   -> Double              -- ^ Time of origin
   -> Double              -- ^ Birth rate
   -> Double              -- ^ Death rate
-  -> Gen (PrimState m)   -- ^ The generator (see 'System.Random.MWC')
-  -> m (Tree Int Double)
+  -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
+  -> m (PhyloTree Int)
 simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l m g
 
 -- | Convert a point process to a reconstructed tree. See Lemma 2.2. Of course,
@@ -87,39 +88,55 @@ simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l 
 -- reconstructed (and not complete) in this sense. However, a complete tree
 -- might show up as "reconstructed", just because, by chance, it does not
 -- contain extinct leaves.
-toReconstructedTree :: (Ord b, Num b)
-                    => a        -- ^ The default node state.
-                    -> PointProcess a b
-                    -> Tree a b
-toReconstructedTree s (PointProcess ps ts t) = Origin s (t - height tr) tr
-  where tr = toReconstructedTree' (map ExtantLeaf ps) ts s
+toReconstructedTree :: a               -- ^ Default node state.
+                    -> PointProcess a
+                    -> PhyloTree a
+toReconstructedTree s pp@(PointProcess ps vs o)
+  | length ps < length vs + 1 = error "Too few points."
+  | length vs <  1            = error "Too few values."
+  | otherwise = toReconstructedTree' s o (values pp) $ toLeaves pp
 
--- | This is the heart of the conversion from a 'PointProcess' to a
--- 'ReconstructedTree'. The algorithm can be improved because the height of the
--- trees that are glued together is calculated over and over again. This might
--- be a time consuming operation.
-toReconstructedTree' :: (Glueable t, Measurable t, Ord b, Num b)
-            => [t a b]          -- ^ The 'Glueable's to glue together.
-            -> [b]              -- ^ The speciation times.
-            -> a                -- ^ The default node state.
-            -> t a b
-toReconstructedTree' [g] [] _ = g
-toReconstructedTree' gs  ts s
-  | length gs < length ts + 1 = error "Too few 'Glueable's."
-  | length ts <  1            = error "Too few glue times."
-  | otherwise                 = toReconstructedTree' (gsL ++ [g] ++ gsR) (tsL ++ tsR) s
-  where
-    -- Minimum time and index.
-    (mT, i)      = minimum $ zip ts ([1..] :: [Int])
-    -- First we need to divide the trees into the ones left and right of the
-    -- pair to be glued together.
-    (gsL', gsR') = splitAt i gs
-    gsL          = init gsL'
-    gsR          = if null gsR' then [] else tail gsR'
-    -- Also the times have to be split up into left and right parts.
-    (tsL', tsR) = splitAt i ts
-    tsL         = init tsL'
-    -- Now find the two trees that will be glued together.
-    lc         = last gsL'
-    rc         = head gsR'
-    g          = glue s (mT - height lc) lc (mT - height rc) rc
+-- | Internal function. Convert a point process to a list of leaves and their branch lengths.
+toLeaves :: PointProcess a -> [(Double, PhyloTree a)]
+toLeaves (PointProcess ps vs _) =
+  [(v, Node (Info p v Extant) []) | (p,v) <- zip ps minVs] where
+  -- Elongate the values, so that the first and the last points also get their
+  -- share.
+  vs'   = [head vs] ++ vs ++ [last vs]
+  -- Create a list of tuples of the neighboring values for each point.
+  vs''  = zip vs' (tail vs')
+  -- Find the minima. These will be the branch lengths of the points.
+  minVs = map minTuple vs''
+
+-- | Internal function. Glue together a list of trees.
+toReconstructedTree'
+  :: a       -- ^ Default node state.
+  -> Double  -- ^ Origin (total tree height).
+  -> [Double] -- ^ The values of the point process.
+  -> [(Double, PhyloTree a)] -- ^ List of trees that will be connected. The
+                             -- height of the trees is also stored, so that it
+                             -- does not have to be calculated repeatedly.
+  -> PhyloTree a
+toReconstructedTree' _ _ _  [t] = snd t
+toReconstructedTree' s o vs hts = if il+1 /= ir
+                                  then error "Ahh."
+                                  else toReconstructedTree' s o vs hts' where
+  -- Fist get the next index and value.
+  (m, i) = minimumWithIndex vs
+  -- First get height and index of the trees that will be connected.
+  mins   = minimumsIndices (map fst hts)
+  (h, i1) = head mins
+  -- The heights should be the same up to machine precision.
+  (_, i2) = last mins
+  il     = minimum [i1, i2]
+  ir     = maximum [i1, i2]
+  tl     = hts !! il
+  tr     = hts !! ir
+  -- Now we need to find the next speciation time up the tree.
+  hll    = if il>0 then fst $ hts !! (il-1) else o
+  hrr    = if ir+1<length hts then fst $ hts !! (ir+1) else o
+  h'     = minimum [hll, hrr]
+  info   = Info s (h'-h) Internal
+  t      = (h', glue info [snd tl, snd tr])
+  -- The list of tree heights and trees for the next call.
+  hts'    = take il hts ++ [t] ++ drop (ir+1) hts

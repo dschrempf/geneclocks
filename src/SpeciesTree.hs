@@ -16,11 +16,11 @@ module SpeciesTree
   , STree
   ) where
 
-import           Tree
+import           PhyloTree
 import qualified Data.Text as T
 
 -- | Species name.
 type SName = T.Text
 
 -- | A species tree is just a binary tree with text as node labels and branch lengths.
-type STree = Tree SName Double
+type STree = Tree SName

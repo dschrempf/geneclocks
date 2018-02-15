@@ -25,6 +25,7 @@ dependencies:
 - primitive >= 0.6.3
 - mwc-random >= 0.13.6
 - text >= 1.2.2
+- containers >= 0.5.10.2
 
 library:
   source-dirs: src
