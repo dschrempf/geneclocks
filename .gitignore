@@ -1,3 +1,5 @@
 .stack-work/
 geneclocks.cabal
 *~
+/TAGS
+/simulate-trees.*

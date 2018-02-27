@@ -34,6 +34,10 @@ module PhyloTree
 
 import           Data.List (intersperse)
 import qualified Data.Text as T
+import qualified Data.Text.Lazy as T (toStrict)
+import qualified Data.Text.Lazy.Builder as B
+import qualified Data.Text.Lazy.Builder.Int as B
+import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
 import qualified Tools
 
@@ -134,21 +138,29 @@ toNewickString = toNewickWith T.pack
 
 -- | Convert a tree with text nodes and branch lengths into a Newick string.
 toNewickInt :: Integral a => PhyloTree a -> T.Text
-toNewickInt = toNewickWith Tools.intToText
+toNewickInt t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal t
 
 -- | General conversion of a tree into a Newick string. Use provided functions
 -- to convert node states and branches to text objects. See also
 -- Biobase.Newick.Export.
 toNewickWith :: (a -> T.Text) -> PhyloTree a -> T.Text
-toNewickWith f t = go t `T.append` T.pack ";\n"
+toNewickWith f t = go t `T.append` T.pack ";"
   where
-    go (Node s [])     = lbl s
-    go (Node s ts)     = T.pack "(" `T.append`
+    go (Node s [])   = lbl s
+    go (Node s ts)   = T.pack "(" `T.append`
                          T.concat (intersperse (T.pack ",") $ map go ts)
                          `T.append` T.pack ")" `T.append` lbl s
     lbl (Info s l _) = f s `T.append`
                        T.pack ":" `T.append` Tools.realFloatToText l
 
+toNewickWithBuilder :: (a -> B.Builder) -> PhyloTree a -> B.Builder
+toNewickWithBuilder f t = go t `mappend` B.singleton ';'
+  where
+    go (Node s [])   = lbl s
+    go (Node s ts)   = B.singleton '(' `mappend`
+                         mconcat (intersperse (B.singleton ',') $ map go ts)
+                         `mappend` B.singleton ')' `mappend` lbl s
+    lbl (Info s l _) = f s `mappend` B.singleton ':' `mappend` B.realFloat l
 
 -- -- | Label the leaves of a tree. The labels will be computed according to a
 -- -- function 'f :: Int -> a'. This will OVERWRITE the leaf labels.

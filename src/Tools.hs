@@ -16,8 +16,9 @@ Some utility functions.
 module Tools
   ( realFloatToText
   , intToText
-  , minimumWithIndex
   , minTuple
+  , minimumWithIndex
+  , sortWithIndices
   , minimumsIndices
   )
   where

@@ -26,18 +26,22 @@ dependencies:
 - mwc-random >= 0.13.6
 - text >= 1.2.2
 - containers >= 0.5.10.2
+- async >= 2.1.1.1
+- optparse-applicative >= 0.14.0.0
+# - transformers
 
 library:
   source-dirs: src
 
 executables:
-  geneclocks-exe:
-    main:                Main.hs
+  simulate-trees:
+    main:                SimulateTrees.hs
     source-dirs:         app
     ghc-options:
     - -threaded
     - -rtsopts
     - -with-rtsopts=-N
+    - -O2
     dependencies:
     - geneclocks
 

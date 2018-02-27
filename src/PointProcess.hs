@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 {- |
    Description :  Point process and functions
    Copyright   :  (c) Dominik Schrempf 2018
@@ -34,6 +36,7 @@ module PointProcess
 import qualified BirthDeathDistribution as D
 import           Control.Monad
 import           Control.Monad.Primitive
+import           Data.List (mapAccumL)
 import           PhyloTree
 import qualified Statistics.Distribution as D (genContVar)
 import           System.Random.MWC
@@ -65,7 +68,7 @@ simulate n t l m g
   | l < 0.0   = error "Birth rate needs to be positive."
   | m < 0.0   = error "Death rate needs to be positive."
   | otherwise = do
-  vs <- replicateM (n-1) (D.genContVar (D.BDD t l m) g)
+  !vs <- replicateM (n-1) (D.genContVar (D.BDD t l m) g)
   return $ PointProcess [0..(n-1)] vs t
 
 -- | Use the point process to simulate a reconstructed tree (see
@@ -94,7 +97,10 @@ toReconstructedTree :: a               -- ^ Default node state.
 toReconstructedTree s pp@(PointProcess ps vs o)
   | length ps < length vs + 1 = error "Too few points."
   | length vs <  1            = error "Too few values."
-  | otherwise = toReconstructedTree' s o (values pp) $ toLeaves pp
+  | otherwise = toReconstructedTree' s o vs vsSorted isSorted (toLeaves pp)
+  where vsIsSorted = sortWithIndices vs
+        vsSorted = map fst vsIsSorted
+        isSorted = flattenIndices $ map snd vsIsSorted
 
 -- | Internal function. Convert a point process to a list of leaves and their branch lengths.
 toLeaves :: PointProcess a -> [(Double, PhyloTree a)]
@@ -102,33 +108,48 @@ toLeaves (PointProcess ps vs _) =
   [(v, Node (Info p v Extant) []) | (p,v) <- zip ps minVs] where
   -- Elongate the values, so that the first and the last points also get their
   -- share.
-  vs'   = [head vs] ++ vs ++ [last vs]
+  !vs'   = [head vs] ++ vs ++ [last vs]
   -- Create a list of tuples of the neighboring values for each point.
-  vs''  = zip vs' (tail vs')
+  !vs''  = zip vs' (tail vs')
   -- Find the minima. These will be the branch lengths of the points.
-  minVs = map minTuple vs''
+  !minVs = map minTuple vs''
 
 -- | Internal function. Glue together a list of trees.
 toReconstructedTree'
   :: a       -- ^ Default node state.
   -> Double  -- ^ Origin (total tree height).
-  -> [Double] -- ^ The values of the point process.
+  -> [Double] -- ^ The unsorted values of the point process.
+  -> [Double] -- ^ The sorted values of the point process.
+  -> [Int]    -- ^ The indices of the sorted values of the point process.
   -> [(Double, PhyloTree a)] -- ^ List of trees that will be connected. The
                              -- height of the trees is also stored, so that it
                              -- does not have to be calculated repeatedly.
   -> PhyloTree a
-toReconstructedTree' _ _ _  [t] = snd t
-toReconstructedTree' s o vs hts = toReconstructedTree' s o vs' hts' where
+toReconstructedTree' _ _ _ _ _ [t]     = snd t
+toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' hts' where
   -- Fist get the next index and value.
-  (h, i) = minimumWithIndex vs
-  tl     = hts !! i
-  tr     = hts !! (i+1)
+  !h = head vsS
+  !i = head is
+  !tl     = hts !! i
+  !tr     = hts !! (i+1)
   -- Now we need to find the next speciation time up the tree.
-  hl    = if i>0 then vs !! (i-1) else o
-  hr    = if i+1<length vs then vs !! (i+1) else o
-  h'     = minimum [hl, hr]
-  info   = Info s (h'-h) Internal
-  t      = (h', glue info [snd tl, snd tr])
+  !hl     = if i>0 then vs !! (i-1) else o
+  !hr     = if i+1<length vs then vs !! (i+1) else o
+  !h'     = minimum [hl, hr]
+  !info   = Info s (h'-h) Internal
+  !t      = (h', glue info [snd tl, snd tr])
   -- The list of tree heights and trees for the next call.
-  hts'    = take i hts ++ [t] ++ drop (i+2) hts
-  vs'     = take i vs ++ drop (i+1) vs
+  !hts'   = take i hts ++ [t] ++ drop (i+2) hts
+  !vsS'    = tail vsS
+  !vs'    = take i vs ++ drop (i+1) vs
+  !is'    = tail is
+
+-- | Internal function. Decrement indices that are above the one that is merged.
+flattenIndices :: [Int] -> [Int]
+flattenIndices is = snd $ mapAccumL fAcc [] is
+
+-- | Internal function. The accumulating function. Count the number of indices
+-- which are before the current index and lower than the current index.
+fAcc :: [Int] -> Int -> ([Int], Int)
+fAcc is i = (i:is, i')
+  where i' = i - length (filter (<i) is)
