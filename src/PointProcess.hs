@@ -17,13 +17,6 @@ Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.00
 The point process can be used to simulate reconstructed trees under the birth
 and death process.
 
-And then I need to write the simulator (which should be easy when the
-distribution has been defined).
-
-Finally, I have to write the bijection between a 'ReconstructedTree' and the
-'PointProcess'. In the beginning, a function from any 'PointProcess' to a
-'ReconstructedTree' will be enough.
-
 -}
 
 module PointProcess
