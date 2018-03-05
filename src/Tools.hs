@@ -58,14 +58,14 @@ sortWithIndices xs = sortBy (compare `on` fst) $ zip xs ([0..] :: [Int])
 minimumsIndices :: Ord a => [a] -> [(a, Int)]
 minimumsIndices xs = take 2 $ sortWithIndices xs
 
--- | The first element of a three-Tuple
+-- | The first element of a three-Tuple.
 fstOfThree :: (a, b, c) -> a
 fstOfThree (x, _, _) = x
 
--- | The second element of a three-Tuple
+-- | The second element of a three-Tuple.
 sndOfThree :: (a, b, c) -> b
 sndOfThree (_, x, _) = x
 
--- | The third element of a three-Tuple
+-- | The third element of a three-Tuple.
 trdOfThree :: (a, b, c) -> c
 trdOfThree (_, _, x) = x

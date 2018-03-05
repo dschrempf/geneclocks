@@ -24,7 +24,7 @@ module PointProcess
   , simulate
   , toReconstructedTree
   , simulateReconstructedTree
-  , branchLengthNChildren
+  , simulateBranchLengthNChildren
   ) where
 
 import qualified BirthDeathDistribution as D
@@ -175,23 +175,26 @@ toBranchLengthNChildren :: PointProcess a
 toBranchLengthNChildren pp@(PointProcess ps vs o)
   | length ps < length vs + 1 = error "Too few points."
   | length vs <  1            = error "Too few values."
-  | otherwise = toBranchLengthNChildren' o vs vsSorted isSorted (map leaveAddChildren leaves)
+  | otherwise = reportLeaves ++
+                toBranchLengthNChildren' o vs vsSorted isSorted (map leaveAddHeightAndChildren leaves)
   where (vsSorted, isSorted) = sort pp
         leaves = toLeaves pp
-        leaveAddChildren (l, t) = (0, l, t)
+        leaveAddChildren (l, _) = (l, 1)
+        leaveAddHeightAndChildren (l, _) = (l, l, 1)
+        reportLeaves = map leaveAddChildren leaves
 
 -- | Internal function, see 'toBranchLengthNChildren'.
 toBranchLengthNChildren'
   :: Double  -- ^ Origin (total tree height).
   -> [Double] -- ^ The unsorted values of the point process.
   -> [Double] -- ^ The sorted values of the point process.
-  -> [Int]    -- ^ The indices of the sorted values of the point process.
-  -> [(Int, Double, PhyloTree a)] -- ^ List of trees that will be connected. The
-  -- number of children and the height of the tree are also stored, so that they
-  -- do not have to be calculated repeatedly.
+  -> [Int]    -- ^ The indices to be of the sorted values of the point process.
+  -> [(Double, Double, Int)] -- ^ List of total height, current branch length,
+                             -- and children of the trees that will be
+                             -- connected.
   -> [(Double, Int)]
-toBranchLengthNChildren' _ _ _ _ [(n, _, t)]   = [((brLn . rootLabel) t, n)]
-toBranchLengthNChildren' o vs vsS is hts = toBranchLengthNChildren' o vs' vsS' is' hts' where
+toBranchLengthNChildren' _ _ _ _ [h]   = []
+toBranchLengthNChildren' o vs vsS is hts = res : toBranchLengthNChildren' o vs' vsS' is' hts' where
   -- Fist get the next index and value.
   !h = head vsS
   !i = head is
@@ -201,10 +204,12 @@ toBranchLengthNChildren' o vs vsS is hts = toBranchLengthNChildren' o vs' vsS' i
   !hl     = if i>0 then vs !! (i-1) else o
   !hr     = if i+1<length vs then vs !! (i+1) else o
   !h'     = minimum [hl, hr]
-  !info   = Info 0 (h'-h) Internal
-  !t      = (h', glue info [snd tl, snd tr])
-  -- The list of tree heights and trees for the next call.
+  !t      = (h', h' - h, trdOfThree tl + trdOfThree tr)
+  -- The list of tree heights, branch lengths and number of children for the
+  -- next call.
   !hts'   = take i hts ++ [t] ++ drop (i+2) hts
-  !vsS'    = tail vsS
+  !vsS'   = tail vsS
   !vs'    = take i vs ++ drop (i+1) vs
   !is'    = tail is
+  -- What needs to be returned.
+  !res    = (sndOfThree t, trdOfThree t)

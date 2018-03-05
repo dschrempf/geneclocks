@@ -28,7 +28,7 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Options.Applicative
 import           PhyloTree (toNewickInt, PhyloTree)
-import           PointProcess (simulateReconstructedTree)
+import           PointProcess (simulateReconstructedTree, simulateBranchLengthNChildren)
 import qualified System.Environment as Sys
 import           System.Random.MWC (createSystemRandom)
 
@@ -154,14 +154,9 @@ newSection h = unlines
 main :: IO ()
 main = do
   args <- parseArgs
-  let t = nTrees args
-      n = nLeaves args
-      h  = height args
-      l  = lambda args
-      m  = mu args
-      s  = sumStat args
-      v  = verbosity args
-      q  = quiet args
+  let v = verbosity args
+      q = quiet args
+      s = sumStat args
   -- Use one capability for now. Seems to be more stable.
   c <- getNumCapabilities
   unless q $ do
@@ -172,19 +167,39 @@ main = do
     putStr $ reportArgs args
     putStr $ newSection "Simulation"
   when v $ putStrLn $ "Number of used cores: " ++ show c
+  res <- if s
+         then simulateNBranchLengthNChildrenConcurrently c args
+         else simulateNTreesConcurrently c args
+  T.putStr res
+
+simulateNTreesConcurrently :: Int -> Args -> IO T.Text
+simulateNTreesConcurrently c (Args t n h l m _ v _) = do
   trs <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v)
   -- If the total number of trees is not divisible by the number of
   -- capabilities, we have to create some more trees.
   trsRe <- simulateNTrees (t `mod` c) n h l m v
-  if not s
-    then T.putStr $ T.unlines $ map toNewickInt (concat trs ++ trsRe)
-    else T.putStr $ T.pack "Todo"
+  return $ T.unlines $ map toNewickInt (concat trs ++ trsRe)
 
 simulateNTrees :: Int -> Int -> Double -> Double -> Double -> Bool -> IO [PhyloTree Int]
-simulateNTrees nT nS t l m v = do
+simulateNTrees nT nL t l m v = do
   when v reportCapability
   g <- createSystemRandom
-  replicateM nT (simulateReconstructedTree nS t l m g)
+  replicateM nT (simulateReconstructedTree nL t l m g)
+
+simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
+simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _) = do
+  trs <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v)
+  -- If the total number of trees is not divisible by the number of
+  -- capabilities, we have to create some more trees.
+  trsRe <- simulateNBranchLengthNChildren (t `mod` c) n h l m v
+  return $ T.unlines $ map (T.pack . show) (concat trs ++ trsRe)
+
+simulateNBranchLengthNChildren :: Int -> Int -> Double -> Double -> Double -> Bool
+                               -> IO [[(Double, Int)]]
+simulateNBranchLengthNChildren nT nL t l m v = do
+  when v reportCapability
+  g <- createSystemRandom
+  replicateM nT (simulateBranchLengthNChildren nL t l m g)
 
 reportCapability :: IO ()
 reportCapability = do
