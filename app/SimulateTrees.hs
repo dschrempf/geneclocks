@@ -27,28 +27,30 @@ import           Data.Semigroup ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Options.Applicative
-import           PhyloTree (toNewickInt)
+import           PhyloTree (toNewickInt, PhyloTree)
 import           PointProcess (simulateReconstructedTree)
 import qualified System.Environment as Sys
 import           System.Random.MWC (createSystemRandom)
 
 data Args = Args
   { nTrees    :: Int    -- ^ Simulated trees.
-  , nSamples  :: Int    -- ^ Species or samples.
-  , height    :: Double -- ^ Tree height (time to origin)>
+  , nLeaves  :: Int    -- ^ Number of leaves.
+  , height    :: Double -- ^ Tree height (time to origin).
   , lambda    :: Double -- ^ Birth rate.
   , mu        :: Double -- ^ Death rate.
+  , sumStat   :: Bool   -- ^ Only print summary statistics?
   , verbosity :: Bool   -- ^ Verbosity.
   , quiet     :: Bool   -- ^ Be quiet?
   }
 
 reportArgs :: Args -> String
-reportArgs (Args t s h l m v q) =
+reportArgs (Args t n h l m s v q) =
   unlines [ "Number of simulated trees: " ++ show t
-          , "Number of species per tree: " ++ show s
+          , "Number of leaves per tree: " ++ show n
           , "Height of trees: " ++ show h
           , "Birth rate: " ++ show l
           , "Death rate: " ++ show m
+          , "Summary statistics only: " ++ show s
           , "Verbosity: " ++ show v
           , "Quiet: " ++ show q ]
 
@@ -64,10 +66,11 @@ parseArgs = execParser $
 argsParser :: Parser Args
 argsParser = Args
   <$> nTreeOpt
-  <*> nSamplesOpt
+  <*> nLeavesOpt
   <*> treeHeightOpt
   <*> lambdaOpt
   <*> muOpt
+  <*> sumStatOpt
   <*> verbosityOpt
   <*> quietOpt
 
@@ -80,14 +83,14 @@ nTreeOpt = option auto
     <> showDefault
     <> help "Number of trees" )
 
-nSamplesOpt :: Parser Int
-nSamplesOpt = option auto
-  ( long "nSamples"
+nLeavesOpt :: Parser Int
+nLeavesOpt = option auto
+  ( long "nLeaves"
     <> short 'n'
     <> metavar "INT"
     <> value 5
     <> showDefault
-    <> help "Number of samples per tree" )
+    <> help "Number of leaves per tree" )
 
 treeHeightOpt :: Parser Double
 treeHeightOpt = option auto
@@ -117,6 +120,13 @@ muOpt = option auto
     <> showDefault
     <> help "Death rate mu" )
 
+sumStatOpt :: Parser Bool
+sumStatOpt = switch
+  ( long "summary-statistics-only"
+    <> short 's'
+    <> showDefault
+    <> help "Only output number of children for each branch" )
+
 verbosityOpt :: Parser Bool
 verbosityOpt = switch
   ( long "verbosity"
@@ -145,10 +155,11 @@ main :: IO ()
 main = do
   args <- parseArgs
   let t = nTrees args
-      s = nSamples args
+      n = nLeaves args
       h  = height args
       l  = lambda args
       m  = mu args
+      s  = sumStat args
       v  = verbosity args
       q  = quiet args
   -- Use one capability for now. Seems to be more stable.
@@ -161,21 +172,19 @@ main = do
     putStr $ reportArgs args
     putStr $ newSection "Simulation"
   when v $ putStrLn $ "Number of used cores: " ++ show c
-  let tCap = t `div` c
-  trs <- replicateConcurrently c (simulateNTrees tCap s h l m v)
-  T.putStr $ T.concat trs
+  trs <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v)
   -- If the total number of trees is not divisible by the number of
   -- capabilities, we have to create some more trees.
-  let re   = t `mod` c
-  trsRe <- simulateNTrees re s h l m v
-  T.putStr trsRe
+  trsRe <- simulateNTrees (t `mod` c) n h l m v
+  if not s
+    then T.putStr $ T.unlines $ map toNewickInt (concat trs ++ trsRe)
+    else T.putStr $ T.pack "Todo"
 
-simulateNTrees :: Int -> Int -> Double -> Double -> Double -> Bool -> IO T.Text
+simulateNTrees :: Int -> Int -> Double -> Double -> Double -> Bool -> IO [PhyloTree Int]
 simulateNTrees nT nS t l m v = do
   when v reportCapability
   g <- createSystemRandom
-  trs <- replicateM nT (simulateReconstructedTree nS t l m g)
-  return $ T.unlines $ map toNewickInt trs
+  replicateM nT (simulateReconstructedTree nS t l m g)
 
 reportCapability :: IO ()
 reportCapability = do

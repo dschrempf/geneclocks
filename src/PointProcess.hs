@@ -24,6 +24,7 @@ module PointProcess
   , simulate
   , toReconstructedTree
   , simulateReconstructedTree
+  , branchLengthNChildren
   ) where
 
 import qualified BirthDeathDistribution as D
@@ -64,6 +65,14 @@ simulate n t l m g
   !vs <- replicateM (n-1) (D.genContVar (D.BDD t l m) g)
   return $ PointProcess [0..(n-1)] vs t
 
+-- | Sort the values of a point process and their indices to be (the indices
+-- that they will have while creating the tree).
+sort :: PointProcess a -> ([Double], [Int])
+sort (PointProcess _ vs _) = (vsSorted, isSorted)
+  where vsIsSorted = sortWithIndices vs
+        vsSorted = map fst vsIsSorted
+        isSorted = flattenIndices $ map snd vsIsSorted
+
 -- | Use the point process to simulate a reconstructed tree (see
 -- 'toReconstructedTree') with specific height and number of leaves according to
 -- the birth and death process.
@@ -91,9 +100,7 @@ toReconstructedTree s pp@(PointProcess ps vs o)
   | length ps < length vs + 1 = error "Too few points."
   | length vs <  1            = error "Too few values."
   | otherwise = toReconstructedTree' s o vs vsSorted isSorted (toLeaves pp)
-  where vsIsSorted = sortWithIndices vs
-        vsSorted = map fst vsIsSorted
-        isSorted = flattenIndices $ map snd vsIsSorted
+  where (vsSorted, isSorted) = sort pp
 
 -- | Internal function. Convert a point process to a list of leaves and their branch lengths.
 toLeaves :: PointProcess a -> [(Double, PhyloTree a)]
@@ -115,7 +122,7 @@ toReconstructedTree'
   -> [Double] -- ^ The sorted values of the point process.
   -> [Int]    -- ^ The indices of the sorted values of the point process.
   -> [(Double, PhyloTree a)] -- ^ List of trees that will be connected. The
-                             -- height of the trees is also stored, so that it
+                             -- height of the tree is also stored, so that it
                              -- does not have to be calculated repeatedly.
   -> PhyloTree a
 toReconstructedTree' _ _ _ _ _ [t]     = snd t
@@ -146,3 +153,58 @@ flattenIndices is = snd $ mapAccumL fAcc [] is
 fAcc :: [Int] -> Int -> ([Int], Int)
 fAcc is i = (i:is, i')
   where i' = i - length (filter (<i) is)
+
+-- | Use the point process to simulate a reconstructed tree (see
+-- 'toReconstructedTree') with specific height and number of leaves according to
+-- the birth and death process. For a specific branch of length 'l', this
+-- function only returns the number of extant children.
+simulateBranchLengthNChildren
+  :: (PrimMonad m)
+  => Int                 -- ^ Number of points (samples)
+  -> Double              -- ^ Time of origin
+  -> Double              -- ^ Birth rate
+  -> Double              -- ^ Death rate
+  -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
+  -> m [(Double, Int)]   -- ^ A list of tuples (Branch length, number of
+                         -- children).
+simulateBranchLengthNChildren n t l m g =  toBranchLengthNChildren <$> simulate n t l m g
+
+-- | Internal function. See 'toReconstructedTree'' and 'simulateBranchLengthNChildren'.
+toBranchLengthNChildren :: PointProcess a
+                        -> [(Double, Int)]
+toBranchLengthNChildren pp@(PointProcess ps vs o)
+  | length ps < length vs + 1 = error "Too few points."
+  | length vs <  1            = error "Too few values."
+  | otherwise = toBranchLengthNChildren' o vs vsSorted isSorted (map leaveAddChildren leaves)
+  where (vsSorted, isSorted) = sort pp
+        leaves = toLeaves pp
+        leaveAddChildren (l, t) = (0, l, t)
+
+-- | Internal function, see 'toBranchLengthNChildren'.
+toBranchLengthNChildren'
+  :: Double  -- ^ Origin (total tree height).
+  -> [Double] -- ^ The unsorted values of the point process.
+  -> [Double] -- ^ The sorted values of the point process.
+  -> [Int]    -- ^ The indices of the sorted values of the point process.
+  -> [(Int, Double, PhyloTree a)] -- ^ List of trees that will be connected. The
+  -- number of children and the height of the tree are also stored, so that they
+  -- do not have to be calculated repeatedly.
+  -> [(Double, Int)]
+toBranchLengthNChildren' _ _ _ _ [(n, _, t)]   = [((brLn . rootLabel) t, n)]
+toBranchLengthNChildren' o vs vsS is hts = toBranchLengthNChildren' o vs' vsS' is' hts' where
+  -- Fist get the next index and value.
+  !h = head vsS
+  !i = head is
+  !tl     = hts !! i
+  !tr     = hts !! (i+1)
+  -- Now we need to find the next speciation time up the tree.
+  !hl     = if i>0 then vs !! (i-1) else o
+  !hr     = if i+1<length vs then vs !! (i+1) else o
+  !h'     = minimum [hl, hr]
+  !info   = Info 0 (h'-h) Internal
+  !t      = (h', glue info [snd tl, snd tr])
+  -- The list of tree heights and trees for the next call.
+  !hts'   = take i hts ++ [t] ++ drop (i+2) hts
+  !vsS'    = tail vsS
+  !vs'    = take i vs ++ drop (i+1) vs
+  !is'    = tail is
