@@ -15,7 +15,7 @@ Creation date: Tue Feb 13 13:16:18 2018.
 See Gernhard, T. (2008). The conditioned reconstructed process. Journal of
 Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.005.
 
-The distribution of the values of the point process such that it corresponds to
+Distribution of the values of the point process such that it corresponds to
 reconstructed trees under the birth and death process.
 
 -}
@@ -31,32 +31,32 @@ import Data.Data (Data, Typeable)
 import GHC.Generics (Generic)
 import qualified Statistics.Distribution as D
 
--- | The distribution of the values of the point process such that it
--- corresponds to a reconstructed tree of the birth and death process.
+-- | Distribution of the values of the point process such that it corresponds to
+-- a reconstructed tree of the birth and death process.
 data BirthDeathDistribution = BDD
-  { bddTOr :: Double            -- ^ The time to origin of the tree.
-  , bddLambda :: Double         -- ^ The birth rate.
-  , bddMu :: Double             -- ^ The death rate.
+  { bddTOr :: Double            -- ^ Time to origin of the tree.
+  , bddLambda :: Double         -- ^ Birth rate.
+  , bddMu :: Double             -- ^ Death rate.
   } deriving (Eq, Typeable, Data, Generic)
 
 instance D.Distribution BirthDeathDistribution where
     cumulative = cumulative
 
--- | The cumulative distribution function Eq. (3).
+-- | Cumulative distribution function Eq. (3).
 cumulative :: BirthDeathDistribution -> Double -> Double
 cumulative (BDD t l m) x
   | x <= 0    = 0
   | x >  t    = 1
   | otherwise = t1 * t2
   where d  = l - m
-        t1 = (1 - exp (-d*x)) / (l - m*exp(-d*x))
+        t1 = (1.0 - exp (-d*x)) / (l - m*exp(-d*x))
         t2 = (l - m*exp(-d*t)) / (1.0 - exp(-d*t))
 
 instance D.ContDistr BirthDeathDistribution where
   density  = density
   quantile = quantile
 
--- | The density function Eq. (2).
+-- | Density function Eq. (2).
 density :: BirthDeathDistribution -> Double -> Double
 density (BDD t l m) x
   | x < 0     = 0
@@ -66,7 +66,7 @@ density (BDD t l m) x
         t1 = exp (-d*x) / ((l - m*exp(-d*x))**2)
         t2 = (l - m*exp(-d*t)) / (1.0 - exp(-d*t))
 
--- | The inverted cumulative probability distribution 'cumulative'. See also
+-- | Inverted cumulative probability distribution 'cumulative'. See also
 -- 'D.ContDistr'.
 quantile :: BirthDeathDistribution -> Double -> Double
 quantile (BDD t l m) p
