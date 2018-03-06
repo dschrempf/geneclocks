@@ -23,20 +23,26 @@ For now, only simulation of reconstructed trees is supported.
 
     Simulate reconstructed trees
 
-    Usage: simulate-trees [-t|--nTrees INT] [-n|--nSamples INT] [-H|--height DOUBLE]
-                          [-l|--lambda DOUBLE] [-m|--mu DOUBLE] [-v|--verbosity]
-                          [-q|--quiet]
-      Simulate reconstructed trees using the point process.
+    Usage: simulate-trees [-t|--nTrees INT] [-n|--nLeaves INT] [-H|--height DOUBLE]
+                          [-l|--lambda DOUBLE] [-m|--mu DOUBLE]
+                          [-s|--summary-statistics] [-v|--verbosity] [-q|--quiet]
+      Simulate reconstructed trees using the point process. See Gernhard, T. (2008).
+      The conditioned reconstructed process. Journal of Theoretical Biology, 253(4),
+      769–778. http://doi.org/10.1016/j.jtbi.2008.04.005
 
     Available options:
       -h,--help                Show this help text
       -t,--nTrees INT          Number of trees (default: 10)
-      -n,--nSamples INT        Number of samples per tree (default: 5)
-      -H,--height DOUBLE       Tree height (default: 1.0)
+      -n,--nLeaves INT         Number of leaves per tree (default: 5)
+      -H,--height DOUBLE       Fix tree height (no default)
       -l,--lambda DOUBLE       Birth rate lambda (default: 1.0)
       -m,--mu DOUBLE           Death rate mu (default: 0.9)
+      -s,--summary-statistics  Only output number of children for each branch
       -v,--verbosity           Verbosity
       -q,--quiet               Be quiet
+
+    If no tree height is given, the heights will be randomly drawn from the expected
+    distribution given the number of leaves, the birth and the death rate.
     ```
 
     Or do a test simulation.
