@@ -24,10 +24,13 @@ module PointProcess
   , simulate
   , toReconstructedTree
   , simulateReconstructedTree
+  , simulateReconstructedTreeRandomHeight
   , simulateBranchLengthNChildren
+  , simulateBranchLengthNChildrenRandomHeight
   ) where
 
-import qualified BirthDeathDistribution as D
+import qualified BirthDeathDistribution as BDD
+import qualified TimeOfOriginDistribution as TOD
 import           Control.Monad
 import           Control.Monad.Primitive
 import           Data.List (mapAccumL)
@@ -62,7 +65,7 @@ simulate n t l m g
   | l < 0.0   = error "Birth rate needs to be positive."
   | m < 0.0   = error "Death rate needs to be positive."
   | otherwise = do
-  !vs <- replicateM (n-1) (D.genContVar (D.BDD t l m) g)
+  !vs <- replicateM (n-1) (D.genContVar (BDD.BDD t l m) g)
   return $ PointProcess [0..(n-1)] vs t
 
 -- | Sort the values of a point process and their indices to be (the indices
@@ -73,13 +76,26 @@ sort (PointProcess _ vs _) = (vsSorted, isSorted)
         vsSorted = map fst vsIsSorted
         isSorted = flattenIndices $ map snd vsIsSorted
 
+-- | Same as 'simulateReconstructedTree' but tree height is drawn from the
+-- expected distribution. See 'TOD.TimeOfOriginDistribution'.
+simulateReconstructedTreeRandomHeight
+  :: (PrimMonad m)
+  => Int                 -- ^ Number of points (samples)
+  -> Double              -- ^ Birth rate
+  -> Double              -- ^ Death rate
+  -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
+  -> m (PhyloTree Int)
+simulateReconstructedTreeRandomHeight n l m g = do
+  t <- D.genContVar (TOD.TOD n l m) g
+  simulateReconstructedTree n t l m g
+
 -- | Use the point process to simulate a reconstructed tree (see
 -- 'toReconstructedTree') with specific height and number of leaves according to
 -- the birth and death process.
 simulateReconstructedTree
   :: (PrimMonad m)
   => Int                 -- ^ Number of points (samples)
-  -> Double              -- ^ Time of origin
+  -> Double        -- ^ Time of origin
   -> Double              -- ^ Birth rate
   -> Double              -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
@@ -126,23 +142,37 @@ toReconstructedTree'
                              -- does not have to be calculated repeatedly.
   -> PhyloTree a
 toReconstructedTree' _ _ _ _ _ [t]     = snd t
-toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' hts' where
-  -- Fist get the next index and value.
-  !h = head vsS
-  !i = head is
-  !tl     = hts !! i
-  !tr     = hts !! (i+1)
-  -- Now we need to find the next speciation time up the tree.
-  !hl     = if i>0 then vs !! (i-1) else o
-  !hr     = if i+1<length vs then vs !! (i+1) else o
-  !h'     = minimum [hl, hr]
-  !info   = Info s (h'-h) Internal
-  !t      = (h', glue info [snd tl, snd tr])
-  -- The list of tree heights and trees for the next call.
-  !hts'   = take i hts ++ [t] ++ drop (i+2) hts
-  !vsS'    = tail vsS
-  !vs'    = take i vs ++ drop (i+1) vs
-  !is'    = tail is
+toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' hts'
+  where
+  (!h, !i, !tl, !tr)     = getHeightIndexAndTrees vsS is hts
+  !h'                    = getNextHeight i vs o
+  !info                  = Info s (h'-h) Internal
+  !t                     = (h', glue info [snd tl, snd tr])
+  (hts', vsS', vs', is') = getNextHeightsAndTrees i hts t vsS vs is
+
+
+-- | Internal function. Get the next index and value, as well as the trees that
+-- will be glued together.
+getHeightIndexAndTrees :: [a] -> [Int] -> [c] -> (a, Int, c, c)
+getHeightIndexAndTrees vsS is hts = (h, i, tl, tr) where
+  !h  = head vsS
+  !i  = head is
+  !tl = hts !! i
+  !tr = hts !! (i+1)
+
+-- | Internal function. Find the next speciation time up the tree.
+getNextHeight :: Int -> [Double] -> Double -> Double
+getNextHeight i vs o = minimum [hl, hr] where
+  !hl                = if i>0 then vs !! (i-1) else o
+  !hr                = if i+1<length vs then vs !! (i+1) else o
+
+-- | Internal function. Get the heights and trees for the next call.
+getNextHeightsAndTrees :: Int -> [a] -> a -> [b] -> [b] -> [Int] -> ([a], [b], [b], [Int])
+getNextHeightsAndTrees i hts t vsS vs is = (hts', vsS', vs', is') where
+  !hts' = take i hts ++ [t] ++ drop (i+2) hts
+  !vsS' = tail vsS
+  !vs'  = take i vs ++ drop (i+1) vs
+  !is'  = tail is
 
 -- | Internal function. Decrement indices that are above the one that is merged.
 flattenIndices :: [Int] -> [Int]
@@ -153,6 +183,19 @@ flattenIndices is = snd $ mapAccumL fAcc [] is
 fAcc :: [Int] -> Int -> ([Int], Int)
 fAcc is i = (i:is, i')
   where i' = i - length (filter (<i) is)
+
+-- | Same as 'simulateBranchLengthNChildren' but tree height is drawn from the
+-- expected distribution. See 'TOD.TimeOfOriginDistribution'.
+simulateBranchLengthNChildrenRandomHeight
+  :: (PrimMonad m)
+  => Int                 -- ^ Number of points (samples)
+  -> Double              -- ^ Birth rate
+  -> Double              -- ^ Death rate
+  -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
+  -> m [(Double, Int)]
+simulateBranchLengthNChildrenRandomHeight n l m g = do
+  t <- D.genContVar (TOD.TOD n l m) g
+  simulateBranchLengthNChildren n t l m g
 
 -- | Use the point process to simulate a reconstructed tree (see
 -- 'toReconstructedTree') with specific height and number of leaves according to
@@ -193,23 +236,11 @@ toBranchLengthNChildren'
                              -- and children of the trees that will be
                              -- connected.
   -> [(Double, Int)]
-toBranchLengthNChildren' _ _ _ _ [h]   = []
-toBranchLengthNChildren' o vs vsS is hts = res : toBranchLengthNChildren' o vs' vsS' is' hts' where
-  -- Fist get the next index and value.
-  !h = head vsS
-  !i = head is
-  !tl     = hts !! i
-  !tr     = hts !! (i+1)
-  -- Now we need to find the next speciation time up the tree.
-  !hl     = if i>0 then vs !! (i-1) else o
-  !hr     = if i+1<length vs then vs !! (i+1) else o
-  !h'     = minimum [hl, hr]
-  !t      = (h', h' - h, trdOfThree tl + trdOfThree tr)
-  -- The list of tree heights, branch lengths and number of children for the
-  -- next call.
-  !hts'   = take i hts ++ [t] ++ drop (i+2) hts
-  !vsS'   = tail vsS
-  !vs'    = take i vs ++ drop (i+1) vs
-  !is'    = tail is
-  -- What needs to be returned.
-  !res    = (sndOfThree t, trdOfThree t)
+toBranchLengthNChildren' _ _ _ _ [_]   = []
+toBranchLengthNChildren' o vs vsS is hts = res : toBranchLengthNChildren' o vs' vsS' is' hts'
+  where
+  (!h, !i, !tl, !tr)     = getHeightIndexAndTrees vsS is hts
+  !h'                    = getNextHeight i vs o
+  !t                     = (h', h' - h, trdOfThree tl + trdOfThree tr)
+  (hts', vsS', vs', is') = getNextHeightsAndTrees i hts t vsS vs is
+  !res                   = (sndOfThree t, trdOfThree t)

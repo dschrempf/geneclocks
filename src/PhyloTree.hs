@@ -25,7 +25,7 @@ module PhyloTree
   , toNewickString
   , toNewickInt
   , toNewickWith
-  -- , labelLeaves
+  , toNewickWithBuilder
   , getExtantLeaves
   , getExtinctLeaves
   , getLeaves
@@ -41,36 +41,37 @@ import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
 import qualified Tools
 
--- | The type of the node. Technically, the type 'Internal' is not necessary
--- because it can be deduced from the tree. However, it is convenient to save
--- the type in this way.
-data PhyloNode = Internal            -- ^ Normal, internal node.
+-- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
+-- necessary because it can be deduced from the tree. However, it is convenient
+-- to save the type in this way.
+data PhyloNode = Internal            -- ^ Internal node.
                | Extant              -- ^ Extant leaf.
                | Extinct             -- ^ Extinct leaf.
                deriving (Eq, Read, Show)
 
--- | The node state of a phylogenetic tree. It contains a label of type 'a', the
--- branch length to the parent node or the origin of the tree and information if
--- the node is internal, extinct and extant..'
+-- | Node state of a phylogenetic tree. It contains a label of unspecified type
+-- 'a', the branch length to the parent node or the origin of the tree and
+-- information if the node type is internal, extinct and extant.'
 data Info a = Info
   { label :: a      -- ^ The label of the node, e.g., Int or String.
   , brLn  :: Double -- ^ The branch length to the parent node or the origin.
   , node  :: PhyloNode } deriving (Show)
 
--- | A phylogenetic tree data type. The node states are of type 'Info a'.
+-- | Phylogenetic tree data type. The node states are of type 'Info a'.
 type PhyloTree a = Tree (Info a)
 
--- | Test if a tree is valid; i.e., no extant or extinct leaves at internal
--- nodes and no internal nodes at the leaves.
+-- | Test if a tree is valid.
+--
+--   * no extant or extinct leaves at internal nodes
+--
+--   * no internal nodes at the leaves.
 valid :: PhyloTree a -> Bool
-valid (Node (Info _ _ Internal) [])    = False
-valid (Node (Info _ _ Extinct ) (_:_)) = False
-valid (Node (Info _ _ Extant  ) (_:_)) = False
-valid (Node (Info _ _ Internal) ts)    = all valid ts
-valid (Node (Info _ _ Extinct)  [])    = True
-valid (Node (Info _ _ Extant)   [])    = True
+valid (Node (Info _ _ Internal) []) = False
+valid (Node (Info _ _ Internal) ts) = all valid ts
+valid (Node Info {}  (_:_))         = False
+valid (Node Info {}  [])            = True
 
--- | The total branch length of the tree.
+-- | Total branch length of a tree.
 totalBrLn :: PhyloTree a -> Double
 totalBrLn (Node s ts) = brLn s + sum (map totalBrLn ts)
 
@@ -78,10 +79,10 @@ totalBrLn (Node s ts) = brLn s + sum (map totalBrLn ts)
 height :: PhyloTree a -> Double
 height (Node s ts) = maximum $ map ((+ brLn s) . height) ts
 
--- | Glue two branches together, so that a new tree emerges. It's root node is
--- new and the left and right branches are the given branches.
-glue :: Info a                -- ^ The new node.
-     -> [PhyloTree a]         -- ^ And the left child tree.
+-- | Glue branches together, so that one new tree emerges. It's root node is
+-- new, the sub-forest has to be given (a list of trees).
+glue :: Info a                -- ^ New root node.
+     -> [PhyloTree a]         -- ^ Sub-forest.
      -> PhyloTree a
 glue (Info _ _ Extant)  _ = error "Root node cannot be of type 'Exant'."
 glue (Info _ _ Extinct) _ = error "Root node cannot be of type 'Extinct'."
@@ -89,9 +90,9 @@ glue s ts = Node s ts
 
 -- | Shorten the distance between root and origin.
 shorten :: PhyloTree a -> Double -> PhyloTree a
-shorten (Node (Info s o n) ts) t = Node (Info s (o-t) n) ts
+shorten (Node (Info s l n) ts) l' = Node (Info s (l-l') n) ts
 
--- -- | Connect a tree with N extant leafs to N trees, so that a new, larger tree
+-- -- | Connect a tree with N extant leaves to N trees, so that a new, larger tree
 -- -- emerges.
 -- connect :: Tree a              -- ^ Parent tree.
 --         -> [t a]            -- ^ Children that will be attached to the leaves.
@@ -128,21 +129,23 @@ getLeavesWith n (Node s ts)
   | node s == n = s : concatMap getLeaves ts
   | otherwise   = concatMap getLeaves ts
 
--- | Convert a tree with text nodes and branch lengths into a Newick string.
+-- | Convert a phylogenetic tree with text node labels into a Newick text object.
 toNewick :: PhyloTree T.Text -> T.Text
 toNewick = toNewickWith id
 
--- | Convert a tree with text nodes and branch lengths into a Newick string.
+-- | Convert a phylogenetic tree with string node labels into a Newick text object.
 toNewickString :: PhyloTree String -> T.Text
 toNewickString = toNewickWith T.pack
 
--- | Convert a tree with text nodes and branch lengths into a Newick string.
+-- | Convert a phylogenetic tree with integral node labels into a Newick text
+-- object. This function is preferable because it uses the text builder and is
+-- much faster.
 toNewickInt :: Integral a => PhyloTree a -> T.Text
 toNewickInt t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal t
 
--- | General conversion of a tree into a Newick string. Use provided functions
--- to convert node states and branches to text objects. See also
--- Biobase.Newick.Export.
+-- | General conversion of a tree into a Newick string in form of a text object.
+-- Use provided functions to convert node states and branches to text objects.
+-- See also Biobase.Newick.Export.
 toNewickWith :: (a -> T.Text) -> PhyloTree a -> T.Text
 toNewickWith f t = go t `T.append` T.pack ";"
   where
@@ -153,6 +156,9 @@ toNewickWith f t = go t `T.append` T.pack ";"
     lbl (Info s l _) = f s `T.append`
                        T.pack ":" `T.append` Tools.realFloatToText l
 
+-- | General conversion of a tree into a Newick string in form of a text object.
+-- Use provided text builders to convert node states and branches to text
+-- objects.
 toNewickWithBuilder :: (a -> B.Builder) -> PhyloTree a -> B.Builder
 toNewickWithBuilder f t = go t `mappend` B.singleton ';'
   where

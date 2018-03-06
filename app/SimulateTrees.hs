@@ -28,14 +28,18 @@ import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Options.Applicative
 import           PhyloTree (toNewickInt, PhyloTree)
-import           PointProcess (simulateReconstructedTree, simulateBranchLengthNChildren)
+import           PointProcess ( simulateReconstructedTree
+                              , simulateReconstructedTreeRandomHeight
+                              , simulateBranchLengthNChildren
+                              , simulateBranchLengthNChildrenRandomHeight)
 import qualified System.Environment as Sys
 import           System.Random.MWC (createSystemRandom)
+import qualified Text.PrettyPrint.ANSI.Leijen as Doc
 
 data Args = Args
   { nTrees    :: Int    -- ^ Simulated trees.
-  , nLeaves  :: Int    -- ^ Number of leaves.
-  , height    :: Double -- ^ Tree height (time to origin).
+  , nLeaves   :: Int    -- ^ Number of leaves.
+  , height    :: Maybe Double -- ^ Tree height (time to origin).
   , lambda    :: Double -- ^ Birth rate.
   , mu        :: Double -- ^ Death rate.
   , sumStat   :: Bool   -- ^ Only print summary statistics?
@@ -44,15 +48,17 @@ data Args = Args
   }
 
 reportArgs :: Args -> String
-reportArgs (Args t n h l m s v q) =
+reportArgs (Args t n mH l m s v q) =
   unlines [ "Number of simulated trees: " ++ show t
           , "Number of leaves per tree: " ++ show n
-          , "Height of trees: " ++ show h
+          , "Height of trees: " ++ hStr
           , "Birth rate: " ++ show l
           , "Death rate: " ++ show m
           , "Summary statistics only: " ++ show s
           , "Verbosity: " ++ show v
           , "Quiet: " ++ show q ]
+  where hStr = case mH of Nothing -> "Random"
+                          Just h  -> show h
 
 -- | The impure IO action that reads the arguments and prints out help if
   -- needed.
@@ -61,7 +67,13 @@ parseArgs = execParser $
   info (helper <*> argsParser)
   (fullDesc
     <> header "Simulate reconstructed trees"
-    <> progDesc "Simulate reconstructed trees using the point process." )
+    <> progDesc desc
+    <> footerDoc remarks )
+  where
+    desc = "Simulate reconstructed trees using the point process. See Gernhard, T. (2008). The conditioned reconstructed process. Journal of Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.005"
+    remarks = Just $ foldl1 (Doc.<$>) (map Doc.text strs)
+    strs    = [ "If no tree height is given, the heights will be randomly drawn from the expected"
+              , "distribution given the number of leaves, the birth and the death rate."]
 
 argsParser :: Parser Args
 argsParser = Args
@@ -92,14 +104,12 @@ nLeavesOpt = option auto
     <> showDefault
     <> help "Number of leaves per tree" )
 
-treeHeightOpt :: Parser Double
-treeHeightOpt = option auto
+treeHeightOpt :: Parser (Maybe Double)
+treeHeightOpt = optional $ option auto
   ( long "height"
     <> short 'H'
     <> metavar "DOUBLE"
-    <> value 1.0
-    <> showDefault
-    <> help "Tree height" )
+    <> help "Fix tree height (no default)" )
 
 
 lambdaOpt :: Parser Double
@@ -122,7 +132,7 @@ muOpt = option auto
 
 sumStatOpt :: Parser Bool
 sumStatOpt = switch
-  ( long "summary-statistics-only"
+  ( long "summary-statistics"
     <> short 's'
     <> showDefault
     <> help "Only output number of children for each branch" )
@@ -180,11 +190,14 @@ simulateNTreesConcurrently c (Args t n h l m _ v _) = do
   trsRe <- simulateNTrees (t `mod` c) n h l m v
   return $ T.unlines $ map toNewickInt (concat trs ++ trsRe)
 
-simulateNTrees :: Int -> Int -> Double -> Double -> Double -> Bool -> IO [PhyloTree Int]
-simulateNTrees nT nL t l m v = do
+simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool -> IO [PhyloTree Int]
+simulateNTrees t n mH l m v = do
   when v reportCapability
   g <- createSystemRandom
-  replicateM nT (simulateReconstructedTree nL t l m g)
+  let f = case mH of
+            Nothing -> simulateReconstructedTreeRandomHeight n l m g
+            Just h -> simulateReconstructedTree n h l m g
+  replicateM t f
 
 simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
 simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _) = do
@@ -192,14 +205,22 @@ simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _) = do
   -- If the total number of trees is not divisible by the number of
   -- capabilities, we have to create some more trees.
   trsRe <- simulateNBranchLengthNChildren (t `mod` c) n h l m v
+  -- TODO: Format output in a better way.
+  -- let treeDats = concat trs ++ trsRe
+  --     treeDatToStr td = unlines $ map (show fst ++ show snd) td
+  -- return T.pack $ map treeDatToStr treeDats
   return $ T.unlines $ map (T.pack . show) (concat trs ++ trsRe)
 
-simulateNBranchLengthNChildren :: Int -> Int -> Double -> Double -> Double -> Bool
+
+simulateNBranchLengthNChildren :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
                                -> IO [[(Double, Int)]]
-simulateNBranchLengthNChildren nT nL t l m v = do
+simulateNBranchLengthNChildren t n mH l m v = do
   when v reportCapability
   g <- createSystemRandom
-  replicateM nT (simulateBranchLengthNChildren nL t l m g)
+  let f = case mH of
+            Nothing -> simulateBranchLengthNChildrenRandomHeight n l m g
+            Just h  -> simulateBranchLengthNChildren n h l m g
+  replicateM t f
 
 reportCapability :: IO ()
 reportCapability = do

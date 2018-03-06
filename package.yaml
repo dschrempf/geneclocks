@@ -28,6 +28,7 @@ dependencies:
 - containers >= 0.5.10.2
 - async >= 2.1.1.1
 - optparse-applicative >= 0.14.0.0
+- ansi-wl-pprint
 # - transformers
 
 library:
