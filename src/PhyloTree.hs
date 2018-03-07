@@ -30,6 +30,9 @@ module PhyloTree
   , getExtinctLeaves
   , getLeaves
   , isReconstructed
+  , BrLnNChildren
+  , NChildSumStat
+  , formatNChildSumStat
   ) where
 
 import           Data.List (intersperse)
@@ -40,6 +43,7 @@ import qualified Data.Text.Lazy.Builder.Int as B
 import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
 import qualified Tools
+import Data.Monoid
 
 -- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
 -- necessary because it can be deduced from the tree. However, it is convenient
@@ -189,3 +193,25 @@ toNewickWithBuilder f t = go t `mappend` B.singleton ';'
 -- reconstructed tree structure.
 isReconstructed :: PhyloTree a -> Bool
 isReconstructed t = notElem Extinct $ map node (flatten t)
+
+-- | Pair of branch length with number of extant children.
+type BrLnNChildren = (Double, Int)
+
+-- | Possible summary statistic of phylogenetic trees. A list of tuples
+-- (BranchLength, NumberOfExtantChildrenBelowThisBranch).
+type NChildSumStat = [BrLnNChildren]
+
+-- | Format the summary statistics in the following form:
+-- @
+--    nLeaves1 branchLength1
+--    nLeaves2 branchLength2
+--    ....
+formatNChildSumStat :: NChildSumStat -> T.Text
+formatNChildSumStat s = T.toStrict.  B.toLazyText . mconcat $ map formatNChildSumStatLine s
+
+-- | Internal function.
+formatNChildSumStatLine :: BrLnNChildren -> B.Builder
+formatNChildSumStatLine (l, n) = B.decimal n
+                                 <> B.singleton ' '
+                                 <> B.realFloat l
+                                 <> B.singleton '\n'

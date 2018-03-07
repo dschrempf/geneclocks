@@ -27,7 +27,7 @@ import           Data.Semigroup ((<>))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           Options.Applicative
-import           PhyloTree (toNewickInt, PhyloTree)
+import           PhyloTree (toNewickInt, PhyloTree, formatNChildSumStat)
 import           PointProcess ( simulateReconstructedTree
                               , simulateReconstructedTreeRandomHeight
                               , simulateBranchLengthNChildren
@@ -72,8 +72,8 @@ parseArgs = execParser $
   where
     desc = "Simulate reconstructed trees using the point process. See Gernhard, T. (2008). The conditioned reconstructed process. Journal of Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.005"
     remarks = Just $ foldl1 (Doc.<$>) (map Doc.text strs)
-    strs    = [ "If no tree height is given, the heights will be randomly drawn from the expected"
-              , "distribution given the number of leaves, the birth and the death rate."]
+    strs    = [ "Height of Trees: If no tree height is given, the heights will be randomly drawn from the expected distribution given the number of leaves, the birth and the death rate."
+              , "Summary statistics only: Only print (NumberOfExtantChildren BranchLength) pairs for each branch of each tree. The trees are separated by a newline character."]
 
 argsParser :: Parser Args
 argsParser = Args
@@ -209,7 +209,7 @@ simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _) = do
   -- let treeDats = concat trs ++ trsRe
   --     treeDatToStr td = unlines $ map (show fst ++ show snd) td
   -- return T.pack $ map treeDatToStr treeDats
-  return $ T.unlines $ map (T.pack . show) (concat trs ++ trsRe)
+  return $ T.unlines $ map formatNChildSumStat (concat trs ++ trsRe)
 
 
 simulateNBranchLengthNChildren :: Int -> Int -> Maybe Double -> Double -> Double -> Bool

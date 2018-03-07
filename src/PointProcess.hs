@@ -25,6 +25,7 @@ module PointProcess
   , toReconstructedTree
   , simulateReconstructedTree
   , simulateReconstructedTreeRandomHeight
+  , toBranchLengthNChildren
   , simulateBranchLengthNChildren
   , simulateBranchLengthNChildrenRandomHeight
   ) where
@@ -150,7 +151,6 @@ toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' h
   !t                     = (h', glue info [snd tl, snd tr])
   (hts', vsS', vs', is') = getNextHeightsAndTrees i hts t vsS vs is
 
-
 -- | Internal function. Get the next index and value, as well as the trees that
 -- will be glued together.
 getHeightIndexAndTrees :: [a] -> [Int] -> [c] -> (a, Int, c, c)
@@ -212,7 +212,7 @@ simulateBranchLengthNChildren
                          -- children).
 simulateBranchLengthNChildren n t l m g =  toBranchLengthNChildren <$> simulate n t l m g
 
--- | Internal function. See 'toReconstructedTree'' and 'simulateBranchLengthNChildren'.
+-- | See 'toReconstructedTree' and 'simulateBranchLengthNChildren'.
 toBranchLengthNChildren :: PointProcess a
                         -> [(Double, Int)]
 toBranchLengthNChildren pp@(PointProcess ps vs o)
