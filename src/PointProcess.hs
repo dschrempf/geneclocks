@@ -30,14 +30,14 @@ module PointProcess
   , simulateBranchLengthNChildrenRandomHeight
   ) where
 
-import qualified BirthDeathDistribution as BDD
-import qualified TimeOfOriginDistribution as TOD
+import qualified BirthDeathDistribution   as BDD
 import           Control.Monad
 import           Control.Monad.Primitive
-import           Data.List (mapAccumL)
+import           Data.List                (mapAccumL)
 import           PhyloTree
-import qualified Statistics.Distribution as D (genContVar)
+import qualified Statistics.Distribution  as D (genContVar)
 import           System.Random.MWC
+import qualified TimeOfOriginDistribution as TOD
 import           Tools
 
 -- | A __point process__ for \(n\) points and of age \(t_{or}\) is defined as

@@ -19,17 +19,22 @@ extra-source-files:
 # common to point users to the README.md file.
 description:         Please see the README on Github at <https://github.com/dschrempf/geneclocks#readme>
 
+ghc-options:
+        - -Wall
+        - -Werror
+
 dependencies:
-- base >= 4.7 && < 5
-- statistics >= 0.14.0.2
-- primitive >= 0.6.3
-- mwc-random >= 0.13.6
-- text >= 1.2.2
-- containers >= 0.5.10.2
-- async >= 2.1.1.1
-- optparse-applicative >= 0.14.0.0
 - ansi-wl-pprint
-# - transformers
+- async >= 2.1.1.1
+- base >= 4.7 && < 5
+- containers >= 0.5.10.2
+- mwc-random >= 0.13.6
+- optparse-applicative >= 0.14.0.0
+- deepseq >= 1.4.3.0
+- parallel >= 3.1.0.1
+- primitive >= 0.6.3
+- statistics >= 0.14.0.2
+- text >= 1.2.2
 
 library:
   source-dirs: src
@@ -43,6 +48,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -O2
+    - -eventlog
     dependencies:
     - geneclocks
 

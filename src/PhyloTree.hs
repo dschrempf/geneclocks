@@ -1,3 +1,7 @@
+-- Needed to derive NFData directly.
+{-# LANGUAGE DeriveAnyClass #-}
+{-# LANGUAGE DeriveGeneric  #-}
+
 {- |
    Description :  Trees
    Copyright   :  (c) Dominik Schrempf 2018
@@ -35,15 +39,17 @@ module PhyloTree
   , formatNChildSumStat
   ) where
 
-import           Data.List (intersperse)
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as T (toStrict)
-import qualified Data.Text.Lazy.Builder as B
-import qualified Data.Text.Lazy.Builder.Int as B
+import           Control.DeepSeq
+import           Data.List                        (intersperse)
+import           Data.Monoid
+import qualified Data.Text                        as T
+import qualified Data.Text.Lazy                   as T (toStrict)
+import qualified Data.Text.Lazy.Builder           as B
+import qualified Data.Text.Lazy.Builder.Int       as B
 import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
+import           GHC.Generics                     (Generic)
 import qualified Tools
-import Data.Monoid
 
 -- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
 -- necessary because it can be deduced from the tree. However, it is convenient
@@ -51,7 +57,7 @@ import Data.Monoid
 data PhyloNode = Internal            -- ^ Internal node.
                | Extant              -- ^ Extant leaf.
                | Extinct             -- ^ Extinct leaf.
-               deriving (Eq, Read, Show)
+               deriving (Eq, Read, Show, Generic, NFData)
 
 -- | Node state of a phylogenetic tree. It contains a label of unspecified type
 -- 'a', the branch length to the parent node or the origin of the tree and
@@ -59,7 +65,7 @@ data PhyloNode = Internal            -- ^ Internal node.
 data Info a = Info
   { label :: a      -- ^ The label of the node, e.g., Int or String.
   , brLn  :: Double -- ^ The branch length to the parent node or the origin.
-  , node  :: PhyloNode } deriving (Show)
+  , node  :: PhyloNode } deriving (Show, Generic, NFData)
 
 -- | Phylogenetic tree data type. The node states are of type 'Info a'.
 type PhyloTree a = Tree (Info a)
@@ -90,7 +96,7 @@ glue :: Info a                -- ^ New root node.
      -> PhyloTree a
 glue (Info _ _ Extant)  _ = error "Root node cannot be of type 'Exant'."
 glue (Info _ _ Extinct) _ = error "Root node cannot be of type 'Extinct'."
-glue s ts = Node s ts
+glue s ts                 = Node s ts
 
 -- | Shorten the distance between root and origin.
 shorten :: PhyloTree a -> Double -> PhyloTree a

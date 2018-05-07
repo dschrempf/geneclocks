@@ -1,3 +1,5 @@
+{-# LANGUAGE BangPatterns #-}
+
 {- |
    Description :  Simulate reconstructed trees
    Copyright   :  (c) Dominik Schrempf 2018
@@ -20,20 +22,22 @@ TODO: lambda ~ mu.
 
 module Main where
 
-import           Control.Concurrent (getNumCapabilities, myThreadId, threadCapability)
-import           Control.Concurrent.Async (replicateConcurrently)
-import           Control.Monad (when, replicateM, unless)
-import           Data.Semigroup ((<>))
-import qualified Data.Text as T
-import qualified Data.Text.IO as T
+import           Control.Concurrent           (getNumCapabilities, myThreadId,
+                                               threadCapability)
+import           Control.Concurrent.Async     (replicateConcurrently)
+import           Control.Monad                (replicateM, unless, when)
+import           Control.Parallel.Strategies
+import           Data.Semigroup               ((<>))
+import qualified Data.Text                    as T
+import qualified Data.Text.IO                 as T
 import           Options.Applicative
-import           PhyloTree (toNewickInt, PhyloTree, formatNChildSumStat)
-import           PointProcess ( simulateReconstructedTree
-                              , simulateReconstructedTreeRandomHeight
-                              , simulateBranchLengthNChildren
-                              , simulateBranchLengthNChildrenRandomHeight)
-import qualified System.Environment as Sys
-import           System.Random.MWC (createSystemRandom)
+import           PhyloTree                    (PhyloTree, formatNChildSumStat,
+                                               toNewickInt)
+import           PointProcess                 (simulateBranchLengthNChildren, simulateBranchLengthNChildrenRandomHeight,
+                                               simulateReconstructedTree,
+                                               simulateReconstructedTreeRandomHeight)
+import qualified System.Environment           as Sys
+import           System.Random.MWC
 import qualified Text.PrettyPrint.ANSI.Leijen as Doc
 
 data Args = Args
@@ -184,32 +188,34 @@ main = do
 
 simulateNTreesConcurrently :: Int -> Args -> IO T.Text
 simulateNTreesConcurrently c (Args t n h l m _ v _) = do
-  trs <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v)
-  -- If the total number of trees is not divisible by the number of
-  -- capabilities, we have to create some more trees.
-  trsRe <- simulateNTrees (t `mod` c) n h l m v
-  return $ T.unlines $ map toNewickInt (concat trs ++ trsRe)
+  trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v)
+  trsRem <- simulateNTrees (t `mod` c) n h l m v
+  let trs = concat trsCon ++ trsRem
+      ls  = parMap rpar toNewickInt trs
+  return $ T.unlines ls
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool -> IO [PhyloTree Int]
-simulateNTrees t n mH l m v = do
-  when v reportCapability
-  g <- createSystemRandom
-  let f = case mH of
+simulateNTrees t n mH l m v
+  | t <= 0 = return []
+  | otherwise = do
+      when v reportCapability
+      g <- createSystemRandom
+      let f = case mH of
             Nothing -> simulateReconstructedTreeRandomHeight n l m g
-            Just h -> simulateReconstructedTree n h l m g
-  replicateM t f
+            Just h  -> simulateReconstructedTree n h l m g
+      replicateM t f
 
 simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
 simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _) = do
-  trs <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v)
-  -- If the total number of trees is not divisible by the number of
-  -- capabilities, we have to create some more trees.
-  trsRe <- simulateNBranchLengthNChildren (t `mod` c) n h l m v
+  trsCon <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v)
+  trsRem <- simulateNBranchLengthNChildren (t `mod` c) n h l m v
+  let trs = concat trsCon ++ trsRem
+      ls  = parMap rpar formatNChildSumStat trs
   -- TODO: Format output in a better way.
   -- let treeDats = concat trs ++ trsRe
   --     treeDatToStr td = unlines $ map (show fst ++ show snd) td
   -- return T.pack $ map treeDatToStr treeDats
-  return $ T.unlines $ map formatNChildSumStat (concat trs ++ trsRe)
+  return $ T.unlines ls
 
 
 simulateNBranchLengthNChildren :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
