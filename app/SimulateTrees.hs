@@ -30,6 +30,7 @@ import           Control.Parallel.Strategies
 import           Data.Semigroup               ((<>))
 import qualified Data.Text                    as T
 import qualified Data.Text.IO                 as T
+import           Data.Vector                  (singleton)
 import           Options.Applicative
 import           PhyloTree                    (PhyloTree, formatNChildSumStat,
                                                toNewickInt)
@@ -79,7 +80,7 @@ parseArgs = do
      <> header "Simulate reconstructed trees"
      <> progDesc desc
      <> footerDoc remarks )
-  if (verbosity a `and` quiet a)
+  if (and [verbosity a, quiet a])
     then error "Cannot be verbose and quiet at the same time."
     else return a
   where
@@ -204,42 +205,41 @@ main = do
   T.putStr res
 
 simulateNTreesConcurrently :: Int -> Args -> IO T.Text
-simulateNTreesConcurrently c (Args t n h l m s v _ _) = do
-  trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v)
-  trsRem <- simulateNTrees (t `mod` c) n h l m v
+simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
+  trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
+  trsRem <- simulateNTrees (t `mod` c) n h l m v s
   let trs = concat trsCon ++ trsRem
       ls  = parMap rpar toNewickInt trs
   return $ T.unlines ls
 
-simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool -> IO [PhyloTree Int]
-simulateNTrees t n mH l m v
+simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
+               -> Maybe Int
+               -> IO [PhyloTree Int]
+simulateNTrees t n mH l m v s
   | t <= 0 = return []
   | otherwise = do
       when v reportCapability
-      g <- createSystemRandom
+      g <- maybe createSystemRandom (initialize . singleton . fromIntegral) s
       let f = case mH of
             Nothing -> simulateReconstructedTreeRandomHeight n l m g
             Just h  -> simulateReconstructedTree n h l m g
       replicateM t f
 
 simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
-simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _) = do
-  trsCon <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v)
-  trsRem <- simulateNBranchLengthNChildren (t `mod` c) n h l m v
+simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _ s) = do
+  trsCon <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v s)
+  trsRem <- simulateNBranchLengthNChildren (t `mod` c) n h l m v s
   let trs = concat trsCon ++ trsRem
       ls  = parMap rpar formatNChildSumStat trs
-  -- TODO: Format output in a better way.
-  -- let treeDats = concat trs ++ trsRe
-  --     treeDatToStr td = unlines $ map (show fst ++ show snd) td
-  -- return T.pack $ map treeDatToStr treeDats
   return $ T.unlines ls
 
 
 simulateNBranchLengthNChildren :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
+                               -> Maybe Int
                                -> IO [[(Double, Int)]]
-simulateNBranchLengthNChildren t n mH l m v = do
+simulateNBranchLengthNChildren t n mH l m v s = do
   when v reportCapability
-  g <- createSystemRandom
+  g <- maybe createSystemRandom (initialize . singleton . fromIntegral) s
   let f = case mH of
             Nothing -> simulateBranchLengthNChildrenRandomHeight n l m g
             Just h  -> simulateBranchLengthNChildren n h l m g

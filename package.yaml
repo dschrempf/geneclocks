@@ -35,6 +35,7 @@ dependencies:
 - primitive >= 0.6.3
 - statistics >= 0.14.0.2
 - text >= 1.2.2
+- vector
 
 library:
   source-dirs: src
