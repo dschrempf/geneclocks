@@ -49,30 +49,39 @@ data Args = Args
   , sumStat   :: Bool   -- ^ Only print summary statistics?
   , verbosity :: Bool   -- ^ Verbosity.
   , quiet     :: Bool   -- ^ Be quiet?
+  , seed      :: Maybe Int -- ^ Seed of NRG, random if 'Nothing'.
   }
 
 reportArgs :: Args -> String
-reportArgs (Args t n mH l m s v q) =
-  unlines [ "Number of simulated trees: " ++ show t
-          , "Number of leaves per tree: " ++ show n
+-- reportArgs (Args t n mH l m s v q) =
+reportArgs a =
+  unlines [ "Number of simulated trees: " ++ show (nTrees a)
+          , "Number of leaves per tree: " ++ show (nLeaves a)
           , "Height of trees: " ++ hStr
-          , "Birth rate: " ++ show l
-          , "Death rate: " ++ show m
-          , "Summary statistics only: " ++ show s
-          , "Verbosity: " ++ show v
-          , "Quiet: " ++ show q ]
-  where hStr = case mH of Nothing -> "Random"
-                          Just h  -> show h
+          , "Birth rate: " ++ show (lambda a)
+          , "Death rate: " ++ show (mu a)
+          , "Summary statistics only: " ++ show (sumStat a)
+          , "Verbosity: " ++ show (verbosity a)
+          , "Quiet: " ++ show (quiet a)
+          , "Seed: " ++ sStr ]
+  where hStr = case height a of Nothing -> "Random"
+                                Just h  -> show h
+        sStr = case seed a of Nothing -> "Random"
+                              Just i  -> show i
 
 -- | The impure IO action that reads the arguments and prints out help if
   -- needed.
 parseArgs :: IO Args
-parseArgs = execParser $
-  info (helper <*> argsParser)
-  (fullDesc
-    <> header "Simulate reconstructed trees"
-    <> progDesc desc
-    <> footerDoc remarks )
+parseArgs = do
+  a <- execParser $
+    info (helper <*> argsParser)
+    (fullDesc
+     <> header "Simulate reconstructed trees"
+     <> progDesc desc
+     <> footerDoc remarks )
+  if (verbosity a `and` quiet a)
+    then error "Cannot be verbose and quiet at the same time."
+    else return a
   where
     desc = "Simulate reconstructed trees using the point process. See Gernhard, T. (2008). The conditioned reconstructed process. Journal of Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.005"
     remarks = Just $ foldl1 (Doc.<$>) (map Doc.text strs)
@@ -89,6 +98,7 @@ argsParser = Args
   <*> sumStatOpt
   <*> verbosityOpt
   <*> quietOpt
+  <*> seedOpt
 
 nTreeOpt :: Parser Int
 nTreeOpt = option auto
@@ -146,14 +156,21 @@ verbosityOpt = switch
   ( long "verbosity"
     <> short 'v'
     <> showDefault
-    <> help "Verbosity" )
+    <> help "Verbosity; incompatible with -q" )
 
 quietOpt :: Parser Bool
 quietOpt = switch
   ( long "quiet"
     <> short 'q'
     <> showDefault
-    <> help "Be quiet" )
+    <> help "Be quiet; incompatible with -v" )
+
+seedOpt :: Parser (Maybe Int)
+seedOpt = optional $ option auto
+  ( long "seed"
+    <> short 'S'
+    <> metavar "INT"
+    <> help "Seed for random number generator (default: random)" )
 
 getCommandLineStr :: String -> [String] -> String
 getCommandLineStr n as = unlines
@@ -187,7 +204,7 @@ main = do
   T.putStr res
 
 simulateNTreesConcurrently :: Int -> Args -> IO T.Text
-simulateNTreesConcurrently c (Args t n h l m _ v _) = do
+simulateNTreesConcurrently c (Args t n h l m s v _ _) = do
   trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v)
   trsRem <- simulateNTrees (t `mod` c) n h l m v
   let trs = concat trsCon ++ trsRem
