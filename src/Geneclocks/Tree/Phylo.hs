@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveGeneric  #-}
 
 {- |
+   Module      :  Geneclocks.Tree.Phylo
    Description :  Trees
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPLv3
@@ -15,7 +16,7 @@ Basis definitions for trees
 
 -}
 
-module PhyloTree
+module Geneclocks.Tree.Phylo
   ( module Data.Tree
   , PhyloNode(..)
   , Info(..)
@@ -48,8 +49,8 @@ import qualified Data.Text.Lazy.Builder           as B
 import qualified Data.Text.Lazy.Builder.Int       as B
 import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
+import qualified Geneclocks.Tools                 as Tools
 import           GHC.Generics                     (Generic)
-import qualified Tools
 
 -- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
 -- necessary because it can be deduced from the tree. However, it is convenient
@@ -215,7 +216,6 @@ type NChildSumStat = [BrLnNChildren]
 formatNChildSumStat :: NChildSumStat -> T.Text
 formatNChildSumStat s = T.toStrict.  B.toLazyText . mconcat $ map formatNChildSumStatLine s
 
--- | Internal function.
 formatNChildSumStatLine :: BrLnNChildren -> B.Builder
 formatNChildSumStatLine (l, n) = B.decimal n
                                  <> B.singleton ' '

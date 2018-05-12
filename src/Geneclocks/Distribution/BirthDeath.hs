@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 {- |
+   Module      :  Geneclocks.Distribution.BirthDeath
    Description :  Birth and death distribution
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -20,7 +21,7 @@ reconstructed trees under the birth and death process.
 
 -}
 
-module BirthDeathDistribution
+module Geneclocks.Distribution.BirthDeath
   ( BirthDeathDistribution(..)
   , cumulative
   , density

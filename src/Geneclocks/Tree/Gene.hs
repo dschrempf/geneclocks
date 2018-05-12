@@ -1,4 +1,5 @@
 {- |
+   Module      :  Geneclocks.Tree.Gene
    Description :  Gene trees
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPLv3
@@ -11,22 +12,22 @@ Definition of gene trees.
 
 -}
 
-module GeneTree
-  ( GName
-  , GState
-  , GTree
+module Geneclocks.Tree.Gene
+  ( GName(..)
+  , GState(..)
+  , GTree(..)
   ) where
 
-import PhyloTree
+import Geneclocks.Tree.Phylo
 import qualified Data.Text as T
-import SpeciesTree
+import Geneclocks.Tree.Species
 
 -- | Gene name.
-type GName = T.Text
+newtype GName = GName T.Text
 
 -- | A gene has a name and belongs to a species.
-type GState = (GName, SName)
+newtype GState = GState (GName, SName)
 
 -- | A gene tree is a binary tree, but genes have not only names but are also
 -- associated to species.
-type GTree = Tree GState
+newtype GTree = GTree (Tree GState)

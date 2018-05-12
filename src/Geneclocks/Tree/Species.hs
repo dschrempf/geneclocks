@@ -1,4 +1,5 @@
 {- |
+   Module      :  Geneclocks.Tree.Species
    Description :  Species trees
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPLv3
@@ -11,16 +12,16 @@ Definition of species trees.
 
 -}
 
-module SpeciesTree
-  ( SName
-  , STree
+module Geneclocks.Tree.Species
+  ( SName(..)
+  , STree(..)
   ) where
 
-import           PhyloTree
+import           Geneclocks.Tree.Phylo
 import qualified Data.Text as T
 
 -- | Species name.
-type SName = T.Text
+newtype SName = SName T.Text
 
 -- | A species tree is just a binary tree with text as node labels and branch lengths.
-type STree = Tree SName
+newtype STree = STree (Tree SName)

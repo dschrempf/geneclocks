@@ -1,4 +1,5 @@
 {- |
+   Modules     :  Geneclocks.Tools
    Description :  Tools
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -13,7 +14,7 @@ Some utility functions.
 
 -}
 
-module Tools
+module Geneclocks.Tools
   ( realFloatToText
   , intToText
   , minTuple
@@ -26,13 +27,13 @@ module Tools
   )
   where
 
-import qualified Data.Text as T
-import qualified Data.Text.Lazy as T (toStrict)
-import qualified Data.Text.Lazy.Builder as B
-import qualified Data.Text.Lazy.Builder.Int as B
+import           Data.Function
+import           Data.List
+import qualified Data.Text                        as T
+import qualified Data.Text.Lazy                   as T (toStrict)
+import qualified Data.Text.Lazy.Builder           as B
+import qualified Data.Text.Lazy.Builder.Int       as B
 import qualified Data.Text.Lazy.Builder.RealFloat as B
-import Data.List
-import Data.Function
 
 -- | Convert a float value to a text object.
 realFloatToText :: RealFloat a => a -> T.Text

@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 {- |
+   Module      :  Geneclocks.PointProcess
    Description :  Point process and functions
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -19,7 +20,7 @@ and death process.
 
 -}
 
-module PointProcess
+module Geneclocks.PointProcess
   ( PointProcess(..)
   , simulate
   , toReconstructedTree
@@ -30,15 +31,15 @@ module PointProcess
   , simulateBranchLengthNChildrenRandomHeight
   ) where
 
-import qualified BirthDeathDistribution   as BDD
 import           Control.Monad
 import           Control.Monad.Primitive
-import           Data.List                (mapAccumL)
-import           PhyloTree
-import qualified Statistics.Distribution  as D (genContVar)
+import           Data.List                            (mapAccumL)
+import qualified Geneclocks.Distribution.BirthDeath   as BDD
+import qualified Geneclocks.Distribution.TimeOfOrigin as TOD
+import           Geneclocks.Tree.Phylo
+import           Geneclocks.Tools
+import qualified Statistics.Distribution              as D (genContVar)
 import           System.Random.MWC
-import qualified TimeOfOriginDistribution as TOD
-import           Tools
 
 -- | A __point process__ for \(n\) points and of age \(t_{or}\) is defined as
 -- follows. Draw $n$ points on the horizontal axis at \(1,2,\ldots,n\). Pick

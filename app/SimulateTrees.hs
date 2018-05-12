@@ -31,12 +31,12 @@ import           Data.Semigroup               ((<>))
 import qualified Data.Text                    as T
 import qualified Data.Text.IO                 as T
 import           Data.Vector                  (singleton)
-import           Options.Applicative
-import           PhyloTree                    (PhyloTree, formatNChildSumStat,
-                                               toNewickInt)
-import           PointProcess                 (simulateBranchLengthNChildren, simulateBranchLengthNChildrenRandomHeight,
+import           Geneclocks.PointProcess      (simulateBranchLengthNChildren, simulateBranchLengthNChildrenRandomHeight,
                                                simulateReconstructedTree,
                                                simulateReconstructedTreeRandomHeight)
+import           Geneclocks.Tree.Phylo        (PhyloTree, formatNChildSumStat,
+                                               toNewickInt)
+import           Options.Applicative
 import qualified System.Environment           as Sys
 import           System.Random.MWC
 import qualified Text.PrettyPrint.ANSI.Leijen as Doc
@@ -189,7 +189,6 @@ main = do
   let v = verbosity args
       q = quiet args
       s = sumStat args
-  -- Use one capability for now. Seems to be more stable.
   c <- getNumCapabilities
   unless q $ do
     p <- Sys.getProgName

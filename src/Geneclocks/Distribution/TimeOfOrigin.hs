@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 {- |
+   Module      :  Geneclocks.Distribution.TimeOfOrigin
    Description :  Distribution of time of origin for birth and death trees
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -20,7 +21,7 @@ in the paper cited above.
 
 -}
 
-module TimeOfOriginDistribution
+module Geneclocks.Distribution.TimeOfOrigin
   ( TimeOfOriginDistribution(..)
   , cumulative
   , density
