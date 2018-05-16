@@ -1,4 +1,4 @@
 #!/usr/bin/env bash
 
-stack exec simulate-trees -- -t 10 -n 20
-# stack exec simulate-trees -- -t 100 -n 1000 -q
+stack exec simulate-trees -- -t 13 -n 5 -S 0
+# stack exec simulate-trees -- -t 100 -n 1000 -q -S 0

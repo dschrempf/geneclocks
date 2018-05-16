@@ -106,12 +106,13 @@ glue s ts                 = Node s ts
 
 -- | Shorten the distance between root and origin.
 shorten :: (Num b, Ord b) => b -> PhyloTree a b -> PhyloTree a b
-shorten dl (Node (Info s l n) ts) | dl > l    = error "Branch lengths cannot be negative."
-                                  | otherwise = Node (Info s (l-dl) n) ts
+shorten dl (Node (Info s l n) ts) | dl <= l   = Node (Info s (l-dl) n) ts
+                                  | otherwise = error "Branch lengths cannot be negative."
 
 -- | Lengthen the distance between root and origin.
 lengthen :: (Num b, Ord b) => b -> PhyloTree a b -> PhyloTree a b
-lengthen dl (Node (Info s l n) ts) = Node (Info s (l+dl) n) ts
+lengthen dl (Node (Info s l n) ts) | dl >= 0 = Node (Info s (l+dl) n) ts
+                                   | otherwise = error "Branch lengths cannot be negative."
 
 -- | Tests if a tree has extinct leaves. If not, it is considered to be a
 -- reconstructed tree structure.

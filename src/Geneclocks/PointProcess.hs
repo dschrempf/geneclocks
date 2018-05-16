@@ -112,17 +112,46 @@ simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l 
 -- reconstructed (and not complete) in this sense. However, a complete tree
 -- might show up as "reconstructed", just because, by chance, it does not
 -- contain extinct leaves.
-toReconstructedTree :: (Num b, Ord b)
-                    => a               -- ^ Default node state.
-                    -> PointProcess a b
-                    -> PhyloTree a b
-toReconstructedTree s pp@(PointProcess ps vs o)
-  | length ps < length vs + 1 = error "Too few points."
-  | length vs <  1            = error "Too few values."
-  | otherwise = toReconstructedTree' s o vs vsSorted isSorted (toLeaves pp)
-  where (vsSorted, isSorted) = sort pp
 
--- | Internal function. Convert a point process to a list of leaves and their branch lengths.
+-- TODO: I wanted to use a Monoid constraint to get the unit element, but this
+-- fails for classical 'Int's. So, I rather have another (useless) argument.
+toReconstructedTree :: (Num b, Ord b)
+                       => a     -- ^ Default node state.
+                       -> PointProcess a b
+                       -> PhyloTree a b
+toReconstructedTree defLabel pp@(PointProcess ps vs o)
+  | length ps /= length vs + 1 = error "Too few or too many points."
+  | length vs <= 1             = error "Too few values."
+  | otherwise = treeOrigin
+  where (vsSorted, isSorted) = sort pp
+        leaves     = [ singleton p 0 | p <- ps ]
+        treeRoot   = toReconstructedTree' defLabel isSorted vsSorted leaves
+        h          = last vsSorted
+        treeOrigin = lengthen (o-h) treeRoot
+
+toReconstructedTree' :: (Num b, Ord b)
+                     => a
+                     -> [Int]
+                     -> [b]
+                     -> [PhyloTree a b]
+                     -> PhyloTree a b
+toReconstructedTree' defLabel is vs trs
+  | length is > 0 = toReconstructedTree' defLabel is' vs' trs''
+  | length is == 0 && length trs == 1 = head trs
+  | otherwise = error "Number of points is not matching the number of merge values."
+  -- For the algorithm, see 'Geneclocks.Coalescent.simulate', but index starts
+  -- at zero.
+  where i  = head is
+        is'  = tail is
+        v    = head vs
+        vs'  = map (subtract v) $ tail vs
+        trs' = map (lengthen v) trs
+        tl    = trs' !! i
+        tr    = trs' !! (i+1)
+        tm   = glue (Info defLabel 0 Internal) [tl, tr]
+        trs'' = take i trs' ++ [tm] ++ drop (i+2) trs'
+
+-- -- Convert a point process to a list of leaves and their branch lengths.
 toLeaves :: (Ord b) => PointProcess a b -> [(b, PhyloTree a b)]
 toLeaves (PointProcess ps vs _) =
   [(v, Node (Info p v Extant) []) | (p,v) <- zip ps minVs] where
@@ -134,29 +163,8 @@ toLeaves (PointProcess ps vs _) =
   -- Find the minima. These will be the branch lengths of the points.
   !minVs = map minTuple vs''
 
--- | Internal function. Glue together a list of trees.
-toReconstructedTree'
-  :: (Num b, Ord b)
-  => a                    -- ^ Default node state.
-  -> b                    -- ^ Origin (total tree height).
-  -> [b]                  -- ^ The unsorted values of the point process.
-  -> [b]                  -- ^ The sorted values of the point process.
-  -> [Int]                -- ^ The indices of the sorted values of the point process.
-  -> [(b, PhyloTree a b)] -- ^ List of trees that will be connected. The height
-                          -- of the tree is also stored, so that it does not
-                          -- have to be calculated repeatedly.
-  -> PhyloTree a b
-toReconstructedTree' _ _ _ _ _ [t]     = snd t
-toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' hts'
-  where
-  (!h, !i, !tl, !tr)     = getHeightIndexAndTrees vsS is hts
-  !h'                    = getNextHeight i vs o
-  !info                  = Info s (h'-h) Internal
-  !t                     = (h', glue info [snd tl, snd tr])
-  (hts', vsS', vs', is') = getNextHeightsAndTrees i hts t vsS vs is
-
--- | Internal function. Get the next index and value, as well as the trees that
--- will be glued together.
+-- Get the next index and value, as well as the trees that will be glued
+-- together.
 getHeightIndexAndTrees :: [a] -> [Int] -> [c] -> (a, Int, c, c)
 getHeightIndexAndTrees vsS is hts = (h, i, tl, tr) where
   !h  = head vsS
@@ -164,13 +172,13 @@ getHeightIndexAndTrees vsS is hts = (h, i, tl, tr) where
   !tl = hts !! i
   !tr = hts !! (i+1)
 
--- | Internal function. Find the next speciation time up the tree.
+-- Find the next speciation time up the tree.
 getNextHeight :: (Ord b) => Int -> [b] -> b -> b
 getNextHeight i vs o = minimum [hl, hr] where
   !hl                = if i>0 then vs !! (i-1) else o
   !hr                = if i+1<length vs then vs !! (i+1) else o
 
--- | Internal function. Get the heights and trees for the next call.
+-- Get the heights and trees for the next call.
 getNextHeightsAndTrees :: Int -> [a] -> a -> [b] -> [b] -> [Int] -> ([a], [b], [b], [Int])
 getNextHeightsAndTrees i hts t vsS vs is = (hts', vsS', vs', is') where
   !hts' = take i hts ++ [t] ++ drop (i+2) hts
@@ -178,15 +186,17 @@ getNextHeightsAndTrees i hts t vsS vs is = (hts', vsS', vs', is') where
   !vs'  = take i vs ++ drop (i+1) vs
   !is'  = tail is
 
--- | Internal function. Decrement indices that are above the one that is merged.
+-- Decrement indices that are above the one that is merged.
 flattenIndices :: [Int] -> [Int]
 flattenIndices is = snd $ mapAccumL fAcc [] is
 
--- | Internal function. The accumulating function. Count the number of indices
--- which are before the current index and lower than the current index.
+-- The accumulating function. Count the number of indices which are before the
+-- current index and lower than the current index.
 fAcc :: [Int] -> Int -> ([Int], Int)
 fAcc is i = (i:is, i')
   where i' = i - length (filter (<i) is)
+
+-- TODO: Also improve the algorithm for the summary statistics only.
 
 -- | Same as 'simulateBranchLengthNChildren' but tree height is drawn from the
 -- expected distribution. See 'TOD.TimeOfOriginDistribution'.
@@ -231,7 +241,7 @@ toBranchLengthNChildren pp@(PointProcess ps vs o)
         leaveAddHeightAndChildren (l, _) = (l, l, 1)
         reportLeaves = map leaveAddChildren leaves
 
--- | Internal function, see 'toBranchLengthNChildren'.
+-- See 'toBranchLengthNChildren'.
 toBranchLengthNChildren'
   :: (Num b, Ord b)
   => b             -- ^ Origin (total tree height).
