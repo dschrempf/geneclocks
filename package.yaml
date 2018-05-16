@@ -50,6 +50,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N
     - -O2
+    # Remove for production.
     - -eventlog
     dependencies:
     - geneclocks

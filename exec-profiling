@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 
+stack exec simulate-trees -- -t 100 -n 1000 +RTS -l -s
+
 # Run the program with
 # -p: profiling support
 # -S: additional statistics
 # -h: memory heap profile
 # -H: set heap size
-stack exec simulate-trees -- -s -t 100 -n 1000 +RTS -p -Ssimulate-trees.stat -h -H1G
+#stack exec simulate-trees -- -t 100 -n 1000 +RTS -p -Ssimulate-trees.stat -h -H1G -l
 
 # Create a graph of the memory heap profile.
-hp2ps -e10in -c simulate-trees.hp
+#hp2ps -e10in -c simulate-trees.hp
 
 # Print which RTS options are available.
 # stack exec simulate-trees -- +RTS -?
