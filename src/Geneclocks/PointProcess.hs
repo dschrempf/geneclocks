@@ -34,10 +34,11 @@ module Geneclocks.PointProcess
 import           Control.Monad
 import           Control.Monad.Primitive
 import           Data.List                            (mapAccumL)
-import qualified Geneclocks.Distribution.BirthDeath   as BDD
-import qualified Geneclocks.Distribution.TimeOfOrigin as TOD
-import           Geneclocks.Tree.Phylo
+import           Geneclocks.Distribution.BirthDeath
+import           Geneclocks.Distribution.TimeOfOrigin
+import           Geneclocks.Distribution.Types
 import           Geneclocks.Tools
+import           Geneclocks.Tree.Phylo
 import qualified Statistics.Distribution              as D (genContVar)
 import           System.Random.MWC
 
@@ -47,32 +48,32 @@ import           System.Random.MWC
 -- \(0 < s_i < t_{or}\). There is a bijection between (ranked) oriented trees
 -- and the point process. Usually, a will be 'String' (or 'Int') and b will be
 -- 'Double'.
-data PointProcess a = PointProcess
+data PointProcess a b = PointProcess
   { points :: ![a]
-  , values :: ![Double]
-  , origin :: !Double } deriving (Read, Show, Eq)
+  , values :: ![b]
+  , origin :: !b } deriving (Read, Show, Eq)
 
 -- | Sample a point process using the 'BirthDeathDistribution'. The names of the
 -- points will be integers.
 simulate :: (PrimMonad m)
-         => Int                 -- ^ Number of points (samples)
-         -> Double              -- ^ Time of origin
-         -> Double              -- ^ Birth rate
-         -> Double              -- ^ Death rate
+         => Int             -- ^ Number of points (samples)
+         -> Time            -- ^ Time of origin
+         -> BirthRate       -- ^ Birth rate
+         -> DeathRate       -- ^ Death rate
          -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
-         -> m (PointProcess Int)
+         -> m (PointProcess Int Double)
 simulate n t l m g
   | n < 1     = error "Number of samples needs to be one or larger."
   | t < 0.0   = error "Time of origin needs to be positive."
   | l < 0.0   = error "Birth rate needs to be positive."
   | m < 0.0   = error "Death rate needs to be positive."
   | otherwise = do
-  !vs <- replicateM (n-1) (D.genContVar (BDD.BDD t l m) g)
+  !vs <- replicateM (n-1) (D.genContVar (BDD t l m) g)
   return $ PointProcess [0..(n-1)] vs t
 
 -- | Sort the values of a point process and their indices to be (the indices
 -- that they will have while creating the tree).
-sort :: PointProcess a -> ([Double], [Int])
+sort :: (Ord b) => PointProcess a b -> ([b], [Int])
 sort (PointProcess _ vs _) = (vsSorted, isSorted)
   where vsIsSorted = sortWithIndices vs
         vsSorted = map fst vsIsSorted
@@ -82,13 +83,13 @@ sort (PointProcess _ vs _) = (vsSorted, isSorted)
 -- expected distribution. See 'TOD.TimeOfOriginDistribution'.
 simulateReconstructedTreeRandomHeight
   :: (PrimMonad m)
-  => Int                 -- ^ Number of points (samples)
-  -> Double              -- ^ Birth rate
-  -> Double              -- ^ Death rate
+  => Int              -- ^ Number of points (samples)
+  -> BirthRate        -- ^ Birth rate
+  -> DeathRate        -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
-  -> m (PhyloTree Int)
+  -> m (PhyloTree Int Double)
 simulateReconstructedTreeRandomHeight n l m g = do
-  t <- D.genContVar (TOD.TOD n l m) g
+  t <- D.genContVar (TOD n l m) g
   simulateReconstructedTree n t l m g
 
 -- | Use the point process to simulate a reconstructed tree (see
@@ -96,12 +97,12 @@ simulateReconstructedTreeRandomHeight n l m g = do
 -- the birth and death process.
 simulateReconstructedTree
   :: (PrimMonad m)
-  => Int                 -- ^ Number of points (samples)
-  -> Double        -- ^ Time of origin
-  -> Double              -- ^ Birth rate
-  -> Double              -- ^ Death rate
+  => Int             -- ^ Number of points (samples)
+  -> Time            -- ^ Time of origin
+  -> BirthRate       -- ^ Birth rate
+  -> DeathRate       -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
-  -> m (PhyloTree Int)
+  -> m (PhyloTree Int Double)
 simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l m g
 
 -- | Convert a point process to a reconstructed tree. See Lemma 2.2. Of course,
@@ -111,9 +112,10 @@ simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l 
 -- reconstructed (and not complete) in this sense. However, a complete tree
 -- might show up as "reconstructed", just because, by chance, it does not
 -- contain extinct leaves.
-toReconstructedTree :: a               -- ^ Default node state.
-                    -> PointProcess a
-                    -> PhyloTree a
+toReconstructedTree :: (Num b, Ord b)
+                    => a               -- ^ Default node state.
+                    -> PointProcess a b
+                    -> PhyloTree a b
 toReconstructedTree s pp@(PointProcess ps vs o)
   | length ps < length vs + 1 = error "Too few points."
   | length vs <  1            = error "Too few values."
@@ -121,7 +123,7 @@ toReconstructedTree s pp@(PointProcess ps vs o)
   where (vsSorted, isSorted) = sort pp
 
 -- | Internal function. Convert a point process to a list of leaves and their branch lengths.
-toLeaves :: PointProcess a -> [(Double, PhyloTree a)]
+toLeaves :: (Ord b) => PointProcess a b -> [(b, PhyloTree a b)]
 toLeaves (PointProcess ps vs _) =
   [(v, Node (Info p v Extant) []) | (p,v) <- zip ps minVs] where
   -- Elongate the values, so that the first and the last points also get their
@@ -134,15 +136,16 @@ toLeaves (PointProcess ps vs _) =
 
 -- | Internal function. Glue together a list of trees.
 toReconstructedTree'
-  :: a       -- ^ Default node state.
-  -> Double  -- ^ Origin (total tree height).
-  -> [Double] -- ^ The unsorted values of the point process.
-  -> [Double] -- ^ The sorted values of the point process.
-  -> [Int]    -- ^ The indices of the sorted values of the point process.
-  -> [(Double, PhyloTree a)] -- ^ List of trees that will be connected. The
-                             -- height of the tree is also stored, so that it
-                             -- does not have to be calculated repeatedly.
-  -> PhyloTree a
+  :: (Num b, Ord b)
+  => a                    -- ^ Default node state.
+  -> b                    -- ^ Origin (total tree height).
+  -> [b]                  -- ^ The unsorted values of the point process.
+  -> [b]                  -- ^ The sorted values of the point process.
+  -> [Int]                -- ^ The indices of the sorted values of the point process.
+  -> [(b, PhyloTree a b)] -- ^ List of trees that will be connected. The height
+                          -- of the tree is also stored, so that it does not
+                          -- have to be calculated repeatedly.
+  -> PhyloTree a b
 toReconstructedTree' _ _ _ _ _ [t]     = snd t
 toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' hts'
   where
@@ -162,7 +165,7 @@ getHeightIndexAndTrees vsS is hts = (h, i, tl, tr) where
   !tr = hts !! (i+1)
 
 -- | Internal function. Find the next speciation time up the tree.
-getNextHeight :: Int -> [Double] -> Double -> Double
+getNextHeight :: (Ord b) => Int -> [b] -> b -> b
 getNextHeight i vs o = minimum [hl, hr] where
   !hl                = if i>0 then vs !! (i-1) else o
   !hr                = if i+1<length vs then vs !! (i+1) else o
@@ -195,7 +198,7 @@ simulateBranchLengthNChildrenRandomHeight
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
   -> m [(Double, Int)]
 simulateBranchLengthNChildrenRandomHeight n l m g = do
-  t <- D.genContVar (TOD.TOD n l m) g
+  t <- D.genContVar (TOD n l m) g
   simulateBranchLengthNChildren n t l m g
 
 -- | Use the point process to simulate a reconstructed tree (see
@@ -214,8 +217,9 @@ simulateBranchLengthNChildren
 simulateBranchLengthNChildren n t l m g =  toBranchLengthNChildren <$> simulate n t l m g
 
 -- | See 'toReconstructedTree' and 'simulateBranchLengthNChildren'.
-toBranchLengthNChildren :: PointProcess a
-                        -> [(Double, Int)]
+toBranchLengthNChildren :: (Num b, Ord b)
+                        => PointProcess a b
+                        -> [(b, Int)]
 toBranchLengthNChildren pp@(PointProcess ps vs o)
   | length ps < length vs + 1 = error "Too few points."
   | length vs <  1            = error "Too few values."
@@ -229,14 +233,14 @@ toBranchLengthNChildren pp@(PointProcess ps vs o)
 
 -- | Internal function, see 'toBranchLengthNChildren'.
 toBranchLengthNChildren'
-  :: Double  -- ^ Origin (total tree height).
-  -> [Double] -- ^ The unsorted values of the point process.
-  -> [Double] -- ^ The sorted values of the point process.
-  -> [Int]    -- ^ The indices to be of the sorted values of the point process.
-  -> [(Double, Double, Int)] -- ^ List of total height, current branch length,
-                             -- and children of the trees that will be
-                             -- connected.
-  -> [(Double, Int)]
+  :: (Num b, Ord b)
+  => b             -- ^ Origin (total tree height).
+  -> [b]           -- ^ The unsorted values of the point process.
+  -> [b]           -- ^ The sorted values of the point process.
+  -> [Int]         -- ^ The indices to be of the sorted values of the point process.
+  -> [(b, b, Int)] -- ^ List of total height, current branch length, and
+                   --   children of the trees that will be connected.
+  -> [(b, Int)]
 toBranchLengthNChildren' _ _ _ _ [_]   = []
 toBranchLengthNChildren' o vs vsS is hts = res : toBranchLengthNChildren' o vs' vsS' is' hts'
   where

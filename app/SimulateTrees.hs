@@ -35,7 +35,7 @@ import           Geneclocks.PointProcess      (simulateBranchLengthNChildren, si
                                                simulateReconstructedTree,
                                                simulateReconstructedTreeRandomHeight)
 import           Geneclocks.Tree.Phylo        (PhyloTree, formatNChildSumStat,
-                                               toNewickInt)
+                                               toNewickIntegral)
 import           Options.Applicative
 import qualified System.Environment           as Sys
 import           System.Random.MWC
@@ -208,12 +208,12 @@ simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
   trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
   trsRem <- simulateNTrees (t `mod` c) n h l m v s
   let trs = concat trsCon ++ trsRem
-      ls  = parMap rpar toNewickInt trs
+      ls  = parMap rpar toNewickIntegral trs
   return $ T.unlines ls
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
                -> Maybe Int
-               -> IO [PhyloTree Int]
+               -> IO [PhyloTree Int Double]
 simulateNTrees t n mH l m v s
   | t <= 0 = return []
   | otherwise = do

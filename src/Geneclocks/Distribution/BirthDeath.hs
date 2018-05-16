@@ -31,20 +31,21 @@ module Geneclocks.Distribution.BirthDeath
 import Data.Data (Data, Typeable)
 import GHC.Generics (Generic)
 import qualified Statistics.Distribution as D
+import Geneclocks.Distribution.Types
 
 -- | Distribution of the values of the point process such that it corresponds to
 -- a reconstructed tree of the birth and death process.
 data BirthDeathDistribution = BDD
-  { bddTOr :: Double            -- ^ Time to origin of the tree.
-  , bddLambda :: Double         -- ^ Birth rate.
-  , bddMu :: Double             -- ^ Death rate.
+  { bddTOr :: Time         -- ^ Time to origin of the tree.
+  , bddLa  :: BirthRate         -- ^ Birth rate.
+  , bddMu  :: DeathRate         -- ^ Death rate.
   } deriving (Eq, Typeable, Data, Generic)
 
 instance D.Distribution BirthDeathDistribution where
     cumulative = cumulative
 
 -- | Cumulative distribution function Eq. (3).
-cumulative :: BirthDeathDistribution -> Double -> Double
+cumulative :: BirthDeathDistribution -> Time -> Double
 cumulative (BDD t l m) x
   | x <= 0    = 0
   | x >  t    = 1
@@ -58,7 +59,7 @@ instance D.ContDistr BirthDeathDistribution where
   quantile = quantile
 
 -- | Density function Eq. (2).
-density :: BirthDeathDistribution -> Double -> Double
+density :: BirthDeathDistribution -> Time -> Double
 density (BDD t l m) x
   | x < 0     = 0
   | x >  t    = 0
@@ -69,7 +70,7 @@ density (BDD t l m) x
 
 -- | Inverted cumulative probability distribution 'cumulative'. See also
 -- 'D.ContDistr'.
-quantile :: BirthDeathDistribution -> Double -> Double
+quantile :: BirthDeathDistribution -> Double -> Time
 quantile (BDD t l m) p
   | p >= 0 && p <= 1 = (-1.0/d) * log ((1.0 - p*l/t2)/(1.0 - p*m/t2))
   | otherwise        =

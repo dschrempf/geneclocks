@@ -20,13 +20,13 @@ module Geneclocks.Tree.Gene
 
 import Geneclocks.Tree.Phylo
 import qualified Data.Text as T
-import Geneclocks.Tree.Species
+import Geneclocks.Tree.Locus
 
 -- | Gene name.
 newtype GName = GName T.Text
 
--- | A gene has a name and belongs to a species.
-newtype GState = GState (GName, SName)
+-- | A gene has a name and belongs to a locus.
+newtype GState = GState (GName, LName)
 
 -- | A gene tree is a binary tree, but genes have not only names but are also
 -- associated to species.

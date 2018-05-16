@@ -12,7 +12,7 @@
    Stability   :  unstable
    Portability :  non-portable (not tested)
 
-Basis definitions for trees
+Phylogenetic trees are the basis of gene, locus and species trees.
 
 -}
 
@@ -21,14 +21,16 @@ module Geneclocks.Tree.Phylo
   , PhyloNode(..)
   , Info(..)
   , PhyloTree
+  , singleton
   , valid
   , totalBrLn
   , height
   , glue
   , shorten
-  , toNewick
+  , lengthen
   , toNewickString
-  , toNewickInt
+  , toNewickText
+  , toNewickIntegral
   , toNewickWith
   , toNewickWithBuilder
   , getExtantLeaves
@@ -63,46 +65,60 @@ data PhyloNode = Internal            -- ^ Internal node.
 -- | Node state of a phylogenetic tree. It contains a label of unspecified type
 -- 'a', the branch length to the parent node or the origin of the tree and
 -- information if the node type is internal, extinct and extant.'
-data Info a = Info
-  { label :: a      -- ^ The label of the node, e.g., Int or String.
-  , brLn  :: Double -- ^ The branch length to the parent node or the origin.
+data Info a b = Info
+  { label :: a            -- ^ The label of the node, e.g., Int or String.
+  , brLn  :: b            -- ^ The branch length to the parent node or the origin.
   , node  :: PhyloNode } deriving (Show, Generic, NFData)
 
 -- | Phylogenetic tree data type. The node states are of type 'Info a'.
-type PhyloTree a = Tree (Info a)
+type PhyloTree a b = Tree (Info a b)
+
+singleton :: a -> b -> PhyloTree a b
+singleton a b = Node (Info a b Extant) []
 
 -- | Test if a tree is valid.
 --
 --   * no extant or extinct leaves at internal nodes
 --
 --   * no internal nodes at the leaves.
-valid :: PhyloTree a -> Bool
+valid :: PhyloTree a b -> Bool
 valid (Node (Info _ _ Internal) []) = False
 valid (Node (Info _ _ Internal) ts) = all valid ts
 valid (Node Info {}  (_:_))         = False
 valid (Node Info {}  [])            = True
 
 -- | Total branch length of a tree.
-totalBrLn :: PhyloTree a -> Double
+totalBrLn :: (Num b) => PhyloTree a b -> b
 totalBrLn (Node s ts) = brLn s + sum (map totalBrLn ts)
 
 -- | The height of the tree (the maximum branch length from root to leaves).
-height :: PhyloTree a -> Double
+height :: (Num b, Ord b) => PhyloTree a b -> b
 height (Node s ts) = maximum $ map ((+ brLn s) . height) ts
 
 -- | Glue branches together, so that one new tree emerges. It's root node is
 -- new, the sub-forest has to be given (a list of trees).
-glue :: Info a                -- ^ New root node.
-     -> [PhyloTree a]         -- ^ Sub-forest.
-     -> PhyloTree a
+glue :: Info a b               -- ^ New root node.
+     -> [PhyloTree a b]        -- ^ Sub-forest.
+     -> PhyloTree a b
 glue (Info _ _ Extant)  _ = error "Root node cannot be of type 'Exant'."
 glue (Info _ _ Extinct) _ = error "Root node cannot be of type 'Extinct'."
 glue s ts                 = Node s ts
 
 -- | Shorten the distance between root and origin.
-shorten :: PhyloTree a -> Double -> PhyloTree a
-shorten (Node (Info s l n) ts) l' = Node (Info s (l-l') n) ts
+shorten :: (Num b, Ord b) => b -> PhyloTree a b -> PhyloTree a b
+shorten dl (Node (Info s l n) ts) | dl > l    = error "Branch lengths cannot be negative."
+                                  | otherwise = Node (Info s (l-dl) n) ts
 
+-- | Lengthen the distance between root and origin.
+lengthen :: (Num b, Ord b) => b -> PhyloTree a b -> PhyloTree a b
+lengthen dl (Node (Info s l n) ts) = Node (Info s (l+dl) n) ts
+
+-- | Tests if a tree has extinct leaves. If not, it is considered to be a
+-- reconstructed tree structure.
+isReconstructed :: PhyloTree a b -> Bool
+isReconstructed t = notElem Extinct $ map node (flatten t)
+
+-- TODO: Is this really necessary?
 -- -- | Connect a tree with N extant leaves to N trees, so that a new, larger tree
 -- -- emerges.
 -- connect :: Tree a              -- ^ Parent tree.
@@ -124,60 +140,62 @@ shorten (Node (Info s l n) ts) l' = Node (Info s (l-l') n) ts
 -- connect' (ExtantLeaf  s) cs n = undefined
 
 -- | For a given tree, return a list of all leaves.
-getExtantLeaves :: PhyloTree a -> [Info a]
+getExtantLeaves :: PhyloTree a b -> [Info a b]
 getExtantLeaves = getLeavesWith Extant
 
 -- | For a given tree, return a list of all leaves.
-getExtinctLeaves :: PhyloTree a -> [Info a]
+getExtinctLeaves :: PhyloTree a b -> [Info a b]
 getExtinctLeaves = getLeavesWith Extinct
 
 -- | For a given tree, return a list of all leaves.
-getLeaves :: PhyloTree a -> [Info a]
+getLeaves :: PhyloTree a b -> [Info a b]
 getLeaves t = getLeavesWith Extinct t ++ getLeavesWith Extant t
 
-getLeavesWith :: PhyloNode -> PhyloTree a -> [Info a]
+getLeavesWith :: PhyloNode -> PhyloTree a b -> [Info a b]
 getLeavesWith n (Node s ts)
   | node s == n = s : concatMap getLeaves ts
   | otherwise   = concatMap getLeaves ts
 
+-- TODO: Probably move this section to a new module 'PhyloTreeNewick'.
+
 -- | Convert a phylogenetic tree with text node labels into a Newick text object.
-toNewick :: PhyloTree T.Text -> T.Text
-toNewick = toNewickWith id
+toNewickText :: (RealFloat b) => PhyloTree T.Text b -> T.Text
+toNewickText = toNewickWith id Tools.realFloatToText
 
 -- | Convert a phylogenetic tree with string node labels into a Newick text object.
-toNewickString :: PhyloTree String -> T.Text
-toNewickString = toNewickWith T.pack
+toNewickString :: (RealFloat b) => PhyloTree String b -> T.Text
+toNewickString = toNewickWith T.pack Tools.realFloatToText
 
 -- | Convert a phylogenetic tree with integral node labels into a Newick text
 -- object. This function is preferable because it uses the text builder and is
 -- much faster.
-toNewickInt :: Integral a => PhyloTree a -> T.Text
-toNewickInt t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal t
+toNewickIntegral :: (Integral a, RealFloat b) => PhyloTree a b -> T.Text
+toNewickIntegral t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal B.realFloat t
 
 -- | General conversion of a tree into a Newick string in form of a text object.
 -- Use provided functions to convert node states and branches to text objects.
 -- See also Biobase.Newick.Export.
-toNewickWith :: (a -> T.Text) -> PhyloTree a -> T.Text
-toNewickWith f t = go t `T.append` T.pack ";"
+toNewickWith :: (a -> T.Text) -> (b -> T.Text)-> PhyloTree a b -> T.Text
+toNewickWith f g t = go t `T.append` T.pack ";"
   where
     go (Node s [])   = lbl s
     go (Node s ts)   = T.pack "(" `T.append`
                          T.concat (intersperse (T.pack ",") $ map go ts)
                          `T.append` T.pack ")" `T.append` lbl s
     lbl (Info s l _) = f s `T.append`
-                       T.pack ":" `T.append` Tools.realFloatToText l
+                       T.pack ":" `T.append` g l
 
 -- | General conversion of a tree into a Newick string in form of a text object.
 -- Use provided text builders to convert node states and branches to text
 -- objects.
-toNewickWithBuilder :: (a -> B.Builder) -> PhyloTree a -> B.Builder
-toNewickWithBuilder f t = go t `mappend` B.singleton ';'
+toNewickWithBuilder :: (a -> B.Builder) -> (b -> B.Builder) -> PhyloTree a b -> B.Builder
+toNewickWithBuilder f g t = go t `mappend` B.singleton ';'
   where
     go (Node s [])   = lbl s
     go (Node s ts)   = B.singleton '(' `mappend`
                          mconcat (intersperse (B.singleton ',') $ map go ts)
                          `mappend` B.singleton ')' `mappend` lbl s
-    lbl (Info s l _) = f s `mappend` B.singleton ':' `mappend` B.realFloat l
+    lbl (Info s l _) = f s `mappend` B.singleton ':' `mappend` g l
 
 -- -- | Label the leaves of a tree. The labels will be computed according to a
 -- -- function 'f :: Int -> a'. This will OVERWRITE the leaf labels.
@@ -196,10 +214,7 @@ toNewickWithBuilder f t = go t `mappend` B.singleton ';'
 --   where (lC', n' ) = labelLeavesWith' f lC n
 --         (rC', n'') = labelLeavesWith' f rC n'
 
--- | Tests if a tree has extinct leaves. If not, it is considered to be a
--- reconstructed tree structure.
-isReconstructed :: PhyloTree a -> Bool
-isReconstructed t = notElem Extinct $ map node (flatten t)
+-- TODO: Maybe move this to a new module 'PhyloTreeSumStat'.
 
 -- | Pair of branch length with number of extant children.
 type BrLnNChildren = (Double, Int)

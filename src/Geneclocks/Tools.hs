@@ -16,7 +16,7 @@ Some utility functions.
 
 module Geneclocks.Tools
   ( realFloatToText
-  , intToText
+  , integralToText
   , minTuple
   , minimumWithIndex
   , sortWithIndices
@@ -40,8 +40,8 @@ realFloatToText :: RealFloat a => a -> T.Text
 realFloatToText = T.toStrict . B.toLazyText . B.realFloat
 
 -- | Convert an integral value to a text object.
-intToText :: Integral a => a -> T.Text
-intToText = T.toStrict . B.toLazyText . B.decimal
+integralToText :: Integral a => a -> T.Text
+integralToText = T.toStrict . B.toLazyText . B.decimal
 
 -- | Minimum of 2-Tuple.
 minTuple :: Ord a => (a, a) -> a

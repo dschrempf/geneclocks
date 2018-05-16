@@ -31,20 +31,21 @@ module Geneclocks.Distribution.TimeOfOrigin
 import Data.Data (Data, Typeable)
 import GHC.Generics (Generic)
 import qualified Statistics.Distribution as D
+import Geneclocks.Distribution.Types
 
 -- | Distribution of the time of origin for a phylogenetic tree evolving under
 -- the birth and death process and conditioned on observing n leaves today.
 data TimeOfOriginDistribution = TOD
   { todTN :: Int                -- ^ Number of leaves of the tree.
-  , todLambda :: Double         -- ^ Birth rate.
-  , todMu :: Double             -- ^ Death rate.
+  , todLa :: BirthRate          -- ^ Birth rate.
+  , todMu :: DeathRate          -- ^ Death rate.
   } deriving (Eq, Typeable, Data, Generic)
 
 instance D.Distribution TimeOfOriginDistribution where
     cumulative = cumulative
 
 -- | Cumulative distribution function Corollary 3.3.
-cumulative :: TimeOfOriginDistribution -> Double -> Double
+cumulative :: TimeOfOriginDistribution -> Time -> Double
 cumulative (TOD n l m) x
   | x <= 0    = 0
   | otherwise = te ** fromIntegral n
@@ -56,7 +57,7 @@ instance D.ContDistr TimeOfOriginDistribution where
   quantile = quantile
 
 -- | The density function Eq. (5).
-density :: TimeOfOriginDistribution -> Double -> Double
+density :: TimeOfOriginDistribution -> Time -> Double
 density (TOD nn l m) x
   | x < 0     = 0
   | otherwise = n * l**n * d**2 * t1**(n-1.0) * ex / (t2**n+1.0)
@@ -68,7 +69,7 @@ density (TOD nn l m) x
 
 -- | The inverted cumulative probability distribution 'cumulative'. See also
 -- 'D.ContDistr'.
-quantile :: TimeOfOriginDistribution -> Double -> Double
+quantile :: TimeOfOriginDistribution -> Double -> Time
 quantile (TOD nn l m) p
   | p >= 0 && p <= 1 = -1.0/d * log(t1/t2)
   | otherwise        =

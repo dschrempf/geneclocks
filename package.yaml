@@ -36,6 +36,7 @@ dependencies:
 - statistics >= 0.14.0.2
 - text >= 1.2.2
 - vector
+- math-functions
 
 library:
   source-dirs: src
