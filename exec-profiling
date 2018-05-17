@@ -7,7 +7,7 @@
 # -S: additional statistics
 # -h: memory heap profile
 # -H: set heap size
-stack exec simulate-trees -- -t 100 -n 1000 +RTS -p -Ssimulate-trees.stat -h -H1G -l
+stack exec simulate-trees -- -t 1 -n 50000 +RTS -p -Ssimulate-trees.stat -h -H1G -l
 
 # Create a graph of the memory heap profile.
 #hp2ps -e10in -c simulate-trees.hp

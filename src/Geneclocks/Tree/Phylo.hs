@@ -28,30 +28,14 @@ module Geneclocks.Tree.Phylo
   , glue
   , shorten
   , lengthen
-  , toNewickString
-  , toNewickText
-  , toNewickIntegral
-  , toNewickWith
-  , toNewickWithBuilder
   , getExtantLeaves
   , getExtinctLeaves
   , getLeaves
   , isReconstructed
-  , BrLnNChildren
-  , NChildSumStat
-  , formatNChildSumStat
   ) where
 
 import           Control.DeepSeq
-import           Data.List                        (intersperse)
-import           Data.Monoid
-import qualified Data.Text                        as T
-import qualified Data.Text.Lazy                   as T (toStrict)
-import qualified Data.Text.Lazy.Builder           as B
-import qualified Data.Text.Lazy.Builder.Int       as B
-import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
-import qualified Geneclocks.Tools                 as Tools
 import           GHC.Generics                     (Generic)
 
 -- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
@@ -119,27 +103,6 @@ lengthen dl (Node (Info s l n) ts) | dl >= 0 = Node (Info s (l+dl) n) ts
 isReconstructed :: PhyloTree a b -> Bool
 isReconstructed t = notElem Extinct $ map node (flatten t)
 
--- TODO: Is this really necessary?
--- -- | Connect a tree with N extant leaves to N trees, so that a new, larger tree
--- -- emerges.
--- connect :: Tree a              -- ^ Parent tree.
---         -> [t a]            -- ^ Children that will be attached to the leaves.
---         -> t a
--- connect p cs = if length cs /= length (getExtantLeaves p)
---                then error "Number of leaves and children mismatch."
---                else fst $ connect' p cs 0
-
--- -- | See also 'labelLeavesWith''.
--- connect' :: (Num b)
---          => Tree a b
---          -> [Tree a b]
---          -> Int                 -- ^ This is now the leaf number.
---          -> (Tree a b, Int)     -- ^ The leave number needs to be tracked.
--- connect' (Origin s b c)  cs n = (Origin s b c', n')
---   where (c', n') = connect' c cs n
--- connect' (ExtinctLeaf s) _  n = (ExtinctLeaf s, n)
--- connect' (ExtantLeaf  s) cs n = undefined
-
 -- | For a given tree, return a list of all leaves.
 getExtantLeaves :: PhyloTree a b -> [Info a b]
 getExtantLeaves = getLeavesWith Extant
@@ -156,84 +119,3 @@ getLeavesWith :: PhyloNode -> PhyloTree a b -> [Info a b]
 getLeavesWith n (Node s ts)
   | node s == n = s : concatMap getLeaves ts
   | otherwise   = concatMap getLeaves ts
-
--- TODO: Probably move this section to a new module 'PhyloTreeNewick'.
-
--- | Convert a phylogenetic tree with text node labels into a Newick text object.
-toNewickText :: (RealFloat b) => PhyloTree T.Text b -> T.Text
-toNewickText = toNewickWith id Tools.realFloatToText
-
--- | Convert a phylogenetic tree with string node labels into a Newick text object.
-toNewickString :: (RealFloat b) => PhyloTree String b -> T.Text
-toNewickString = toNewickWith T.pack Tools.realFloatToText
-
--- | Convert a phylogenetic tree with integral node labels into a Newick text
--- object. This function is preferable because it uses the text builder and is
--- much faster.
-toNewickIntegral :: (Integral a, RealFloat b) => PhyloTree a b -> T.Text
-toNewickIntegral t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal B.realFloat t
-
--- | General conversion of a tree into a Newick string in form of a text object.
--- Use provided functions to convert node states and branches to text objects.
--- See also Biobase.Newick.Export.
-toNewickWith :: (a -> T.Text) -> (b -> T.Text)-> PhyloTree a b -> T.Text
-toNewickWith f g t = go t `T.append` T.pack ";"
-  where
-    go (Node s [])   = lbl s
-    go (Node s ts)   = T.pack "(" `T.append`
-                         T.concat (intersperse (T.pack ",") $ map go ts)
-                         `T.append` T.pack ")" `T.append` lbl s
-    lbl (Info s l _) = f s `T.append`
-                       T.pack ":" `T.append` g l
-
--- | General conversion of a tree into a Newick string in form of a text object.
--- Use provided text builders to convert node states and branches to text
--- objects.
-toNewickWithBuilder :: (a -> B.Builder) -> (b -> B.Builder) -> PhyloTree a b -> B.Builder
-toNewickWithBuilder f g t = go t `mappend` B.singleton ';'
-  where
-    go (Node s [])   = lbl s
-    go (Node s ts)   = B.singleton '(' `mappend`
-                         mconcat (intersperse (B.singleton ',') $ map go ts)
-                         `mappend` B.singleton ')' `mappend` lbl s
-    lbl (Info s l _) = f s `mappend` B.singleton ':' `mappend` g l
-
--- -- | Label the leaves of a tree. The labels will be computed according to a
--- -- function 'f :: Int -> a'. This will OVERWRITE the leaf labels.
--- labelLeaves :: Tree T.Text b -> Tree T.Text b
--- labelLeaves = labelLeavesWith Tools.intToText
-
--- labelLeavesWith :: (Int -> a) -> Tree a b -> Tree a b
--- labelLeavesWith f t = fst $ labelLeavesWith' f t 0
-
--- labelLeavesWith' :: (Int -> a) -> Tree a b -> Int -> (Tree a b, Int)
--- labelLeavesWith' f (Origin s b c) n  = (Origin s b c', n')
---   where (c', n') = labelLeavesWith' f c n
--- labelLeavesWith' f (ExtantLeaf _) n  = (ExtantLeaf (f n), n+1)
--- labelLeavesWith' f (ExtinctLeaf _) n = (ExtinctLeaf (f n), n+1)
--- labelLeavesWith' f (Node s lB lC rB rC) n = (Node s lB lC' rB rC', n'')
---   where (lC', n' ) = labelLeavesWith' f lC n
---         (rC', n'') = labelLeavesWith' f rC n'
-
--- TODO: Maybe move this to a new module 'PhyloTreeSumStat'.
-
--- | Pair of branch length with number of extant children.
-type BrLnNChildren = (Double, Int)
-
--- | Possible summary statistic of phylogenetic trees. A list of tuples
--- (BranchLength, NumberOfExtantChildrenBelowThisBranch).
-type NChildSumStat = [BrLnNChildren]
-
--- | Format the summary statistics in the following form:
--- @
---    nLeaves1 branchLength1
---    nLeaves2 branchLength2
---    ....
-formatNChildSumStat :: NChildSumStat -> T.Text
-formatNChildSumStat s = T.toStrict.  B.toLazyText . mconcat $ map formatNChildSumStatLine s
-
-formatNChildSumStatLine :: BrLnNChildren -> B.Builder
-formatNChildSumStatLine (l, n) = B.decimal n
-                                 <> B.singleton ' '
-                                 <> B.realFloat l
-                                 <> B.singleton '\n'

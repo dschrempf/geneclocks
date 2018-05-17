@@ -22,24 +22,26 @@ TODO: lambda ~ mu.
 
 module Main where
 
-import           Control.Concurrent           (getNumCapabilities, myThreadId,
-                                               threadCapability)
-import           Control.Concurrent.Async     (replicateConcurrently)
-import           Control.Monad                (replicateM, unless, when)
+import           Control.Concurrent               (getNumCapabilities,
+                                                   myThreadId, threadCapability)
+import           Control.Concurrent.Async         (replicateConcurrently)
+import           Control.Monad                    (replicateM, unless, when)
 import           Control.Parallel.Strategies
-import           Data.Semigroup               ((<>))
-import qualified Data.Text                    as T
-import qualified Data.Text.IO                 as T
-import           Data.Vector                  (singleton)
-import           Geneclocks.PointProcess      (simulateBranchLengthNChildren, simulateBranchLengthNChildrenRandomHeight,
-                                               simulateReconstructedTree,
-                                               simulateReconstructedTreeRandomHeight)
-import           Geneclocks.Tree.Phylo        (PhyloTree, formatNChildSumStat,
-                                               toNewickIntegral)
+import           Data.Semigroup                   ((<>))
+import qualified Data.Text                        as T
+import qualified Data.Text.IO                     as T
+import           Data.Vector                      (singleton)
+import           Geneclocks.Simulate.PointProcess (simulateBranchLengthNChildren,
+                                                   simulateBranchLengthNChildrenRandomHeight,
+                                                   simulateReconstructedTree,
+                                                   simulateReconstructedTreeRandomHeight)
+import           Geneclocks.Tree.Phylo            (PhyloTree)
+import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
+import           Geneclocks.Tree.PhyloSumStat     (formatNChildSumStat)
 import           Options.Applicative
-import qualified System.Environment           as Sys
+import qualified System.Environment               as Sys
 import           System.Random.MWC
-import qualified Text.PrettyPrint.ANSI.Leijen as Doc
+import qualified Text.PrettyPrint.ANSI.Leijen     as Doc
 
 data Args = Args
   { nTrees    :: Int    -- ^ Simulated trees.

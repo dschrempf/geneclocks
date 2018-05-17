@@ -1,7 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 
 {- |
-   Module      :  Geneclocks.PointProcess
+   Module      :  Geneclocks.Simulate.PointProcess
    Description :  Point process and functions
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -20,7 +20,7 @@ and death process.
 
 -}
 
-module Geneclocks.PointProcess
+module Geneclocks.Simulate.PointProcess
   ( PointProcess(..)
   , simulate
   , toReconstructedTree
@@ -112,11 +112,9 @@ simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l 
 -- reconstructed (and not complete) in this sense. However, a complete tree
 -- might show up as "reconstructed", just because, by chance, it does not
 -- contain extinct leaves.
--- TODO: I wanted to use a Monoid constraint to get the unit element, but this
+
+-- I wanted to use a Monoid constraint to get the unit element, but this
 -- fails for classical 'Int's. So, I rather have another (useless) argument.
--- TODO: As it turns out, this is SLOW. Repeated lengthening takes a long time.
--- Also repeated decrease of the values takes time... I could go back to the
--- other algorithm but it is way uglier.
 toReconstructedTree :: (Num b, Ord b)
                        => a     -- ^ Default node state.
                        -> PointProcess a b
@@ -159,44 +157,6 @@ toReconstructedTree' defLabel is vs trs hs = toReconstructedTree' defLabel is' v
         !tm    = glue (Info defLabel 0 Internal) [tl, tr]
         !trs'' = take i trs ++ [tm] ++ drop (i+2) trs
         !hs'   = take i hs ++ [h'] ++ drop (i+2) hs
-
--- -- | THE OLD ALGORITHM. Convert a point process to a
--- -- reconstructed tree. See Lemma 2.2. Of course, I decided to only use one tree
--- -- structure with extinct and extant leaves (actually a complete tree). So a
--- -- tree created here just does not contain extinct leaves. A function
--- -- 'isReconstructed' is provided to test if a tree is reconstructed (and not
--- -- complete) in this sense. However, a complete tree might show up as
--- -- "reconstructed", just because, by chance, it does not contain extinct leaves.
--- toReconstructedTree :: (Num b, Ord b)
---                     => a               -- ^ Default node state.
---                     -> PointProcess a b
---                     -> PhyloTree a b
--- toReconstructedTree s pp@(PointProcess ps vs o)
---   | length ps < length vs + 1 = error "Too few points."
---   | length vs <  1            = error "Too few values."
---   | otherwise = toReconstructedTree' s o vs vsSorted isSorted (toLeaves pp)
---   where (vsSorted, isSorted) = sort pp
-
--- -- Glue together a list of trees.
--- toReconstructedTree'
---   :: (Num b, Ord b)
---   => a       -- ^ Default node state.
---   -> b  -- ^ Origin (total tree height).
---   -> [b] -- ^ The unsorted values of the point process.
---   -> [b] -- ^ The sorted values of the point process.
---   -> [Int]    -- ^ The indices of the sorted values of the point process.
---   -> [(b, PhyloTree a b)] -- ^ List of trees that will be connected. The
---                              -- height of the tree is also stored, so that it
---                              -- does not have to be calculated repeatedly.
---   -> PhyloTree a b
--- toReconstructedTree' _ _ _ _ _ [t]     = snd t
--- toReconstructedTree' s o vs vsS is hts = toReconstructedTree' s o vs' vsS' is' hts'
---   where
---   (!h, !i, !tl, !tr)     = getHeightIndexAndTrees vsS is hts
---   !h'                    = getNextHeight i vs o
---   !info                  = Info s (h'-h) Internal
---   !t                     = (h', glue info [snd tl, snd tr])
---   (hts', vsS', vs', is') = getNextHeightsAndTrees i hts t vsS vs is
 
 -- -- Convert a point process to a list of leaves and their branch lengths.
 toLeaves :: (Ord b) => PointProcess a b -> [(b, PhyloTree a b)]

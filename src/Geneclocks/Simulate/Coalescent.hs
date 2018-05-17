@@ -1,5 +1,5 @@
 {- |
-Module      :  Geneclocks.Coalescent
+Module      :  Geneclocks.Simulate.Coalescent
 Description :  Generate coalescent trees.
 Copyright   :  (c) Dominik Schrempf 2018
 License     :  GPL-3
@@ -13,7 +13,7 @@ Creation date: Wed May 16 13:13:11 2018.
 -}
 
 
-module Geneclocks.Coalescent
+module Geneclocks.Simulate.Coalescent
   ( simulate
   ) where
 
