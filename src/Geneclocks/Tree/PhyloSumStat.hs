@@ -15,15 +15,17 @@ Creation date: Thu May 17 14:05:45 2018.
 module Geneclocks.Tree.PhyloSumStat
   ( BrLnNChildren
   , NChildSumStat
+  , toNChildSumStat
   , formatNChildSumStat
   ) where
 
-import           Data.Monoid ((<>))
+import           Data.Monoid                      ((<>))
 import qualified Data.Text                        as T
 import qualified Data.Text.Lazy                   as T (toStrict)
 import qualified Data.Text.Lazy.Builder           as B
 import qualified Data.Text.Lazy.Builder.Int       as B
 import qualified Data.Text.Lazy.Builder.RealFloat as B
+import           Geneclocks.Tree.Phylo
 
 -- This may be too specific, but I only change it if necessary. E.g., use types
 -- a (for node labels) and b (for branch lengths).
@@ -49,5 +51,9 @@ formatNChildSumStatLine (l, n) = B.decimal n
                                  <> B.realFloat l
                                  <> B.singleton '\n'
 
--- TODO: Separate simulation of tree and conversion to, e.g., BrLnNChildren
--- (both is now done in PointProcess.hs). However, this may be slower.
+-- | Compute NChilSumStat for a phylogenetic tree.
+toNChildSumStat :: PhyloTree a Double -> NChildSumStat
+toNChildSumStat (Node (Info _ b Extant) _) = [(b, 1)]
+toNChildSumStat (Node (Info _ b _)    chs) = (b, sumCh) : (concat nChSS)
+  where nChSS = map toNChildSumStat chs
+        sumCh = sum $ map (snd . head) nChSS

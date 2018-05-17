@@ -31,13 +31,11 @@ import           Data.Semigroup                   ((<>))
 import qualified Data.Text                        as T
 import qualified Data.Text.IO                     as T
 import           Data.Vector                      (singleton)
-import           Geneclocks.Simulate.PointProcess (simulateBranchLengthNChildren,
-                                                   simulateBranchLengthNChildrenRandomHeight,
-                                                   simulateReconstructedTree,
+import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree,
                                                    simulateReconstructedTreeRandomHeight)
 import           Geneclocks.Tree.Phylo            (PhyloTree)
 import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
-import           Geneclocks.Tree.PhyloSumStat     (formatNChildSumStat)
+import           Geneclocks.Tree.PhyloSumStat     (toNChildSumStat, formatNChildSumStat)
 import           Options.Applicative
 import qualified System.Environment               as Sys
 import           System.Random.MWC
@@ -56,7 +54,6 @@ data Args = Args
   }
 
 reportArgs :: Args -> String
--- reportArgs (Args t n mH l m s v q) =
 reportArgs a =
   unlines [ "Number of simulated trees: " ++ show (nTrees a)
           , "Number of leaves per tree: " ++ show (nLeaves a)
@@ -200,18 +197,17 @@ main = do
     putStr $ reportArgs args
     putStr $ newSection "Simulation"
   when v $ putStrLn $ "Number of used cores: " ++ show c
-  res <- if s
-         then simulateNBranchLengthNChildrenConcurrently c args
-         else simulateNTreesConcurrently c args
-  T.putStr res
+  trs <- simulateNTreesConcurrently c args
+  let ls = if s
+           then parMap rpar (formatNChildSumStat . toNChildSumStat) trs
+           else parMap rpar toNewickIntegral trs
+  T.putStr $ T.unlines ls
 
-simulateNTreesConcurrently :: Int -> Args -> IO T.Text
+simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double]
 simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
   trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
   trsRem <- simulateNTrees (t `mod` c) n h l m v s
-  let trs = concat trsCon ++ trsRem
-      ls  = parMap rpar toNewickIntegral trs
-  return $ T.unlines ls
+  return $ concat trsCon ++ trsRem
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
                -> Maybe Int
@@ -226,25 +222,25 @@ simulateNTrees t n mH l m v s
             Just h  -> simulateReconstructedTree n h l m g
       replicateM t f
 
-simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
-simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _ s) = do
-  trsCon <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v s)
-  trsRem <- simulateNBranchLengthNChildren (t `mod` c) n h l m v s
-  let trs = concat trsCon ++ trsRem
-      ls  = parMap rpar formatNChildSumStat trs
-  return $ T.unlines ls
+-- simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
+-- simulateNBranchLengthNChildrenConcurrently c (Args t n h l m _ v _ s) = do
+--   trsCon <- replicateConcurrently c (simulateNBranchLengthNChildren (t `div` c) n h l m v s)
+--   trsRem <- simulateNBranchLengthNChildren (t `mod` c) n h l m v s
+--   let trs = concat trsCon ++ trsRem
+--       ls  = parMap rpar formatNChildSumStat trs
+--   return $ T.unlines ls
 
 
-simulateNBranchLengthNChildren :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
-                               -> Maybe Int
-                               -> IO [[(Double, Int)]]
-simulateNBranchLengthNChildren t n mH l m v s = do
-  when v reportCapability
-  g <- maybe createSystemRandom (initialize . singleton . fromIntegral) s
-  let f = case mH of
-            Nothing -> simulateBranchLengthNChildrenRandomHeight n l m g
-            Just h  -> simulateBranchLengthNChildren n h l m g
-  replicateM t f
+-- simulateNBranchLengthNChildren :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
+--                                -> Maybe Int
+--                                -> IO [[(Double, Int)]]
+-- simulateNBranchLengthNChildren t n mH l m v s = do
+--   when v reportCapability
+--   g <- maybe createSystemRandom (initialize . singleton . fromIntegral) s
+--   let f = case mH of
+--             Nothing -> simulateBranchLengthNChildrenRandomHeight n l m g
+--             Just h  -> simulateBranchLengthNChildren n h l m g
+--   replicateM t f
 
 reportCapability :: IO ()
 reportCapability = do
