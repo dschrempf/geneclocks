@@ -1,5 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
-
 {- |
    Description :  Simulate reconstructed trees
    Copyright   :  (c) Dominik Schrempf 2018
@@ -29,11 +27,12 @@ import           Data.Semigroup                   ((<>))
 import qualified Data.Text                        as T
 import qualified Data.Text.IO                     as T
 import           Data.Vector                      (singleton)
-import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree,
-                                                   simulateReconstructedTreeRandomHeight)
-import           Geneclocks.Tree.Phylo            (PhyloTree, PhyloNode)
+import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree, simulateReconstructedTreeRandomHeight)
+import           Geneclocks.Tree.Phylo            (PhyloTree)
 import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
-import           Geneclocks.Tree.PhyloSumStat     (toNChildSumStat, formatNChildSumStat)
+import           Geneclocks.Tree.PhyloSumStat     (formatNChildSumStat,
+                                                   toNChildSumStat)
+import           Geneclocks.Tree.Species          (SNode)
 import           Options.Applicative
 import qualified System.Environment               as Sys
 import           System.Random.MWC
@@ -77,7 +76,7 @@ parseArgs = do
      <> header "Simulate reconstructed trees"
      <> progDesc desc
      <> footerDoc remarks )
-  if (and [verbosity a, quiet a])
+  if verbosity a && quiet a
     then error "Cannot be verbose and quiet at the same time."
     else return a
   where
@@ -201,7 +200,7 @@ main = do
            else parMap rpar toNewickIntegral trs
   T.putStr $ T.unlines ls
 
-simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double PhyloNode]
+simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double SNode]
 simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
   trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
   trsRem <- simulateNTrees (t `mod` c) n h l m v s
@@ -209,7 +208,7 @@ simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
                -> Maybe Int
-               -> IO [PhyloTree Int Double PhyloNode]
+               -> IO [PhyloTree Int Double SNode]
 simulateNTrees t n mH l m v s
   | t <= 0 = return []
   | otherwise = do

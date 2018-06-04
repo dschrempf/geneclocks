@@ -16,21 +16,22 @@ with "GeneIndividual" trees, which combine the notion of gene and individual.
 -}
 
 module Geneclocks.Tree.Gene
-  ( GName(..)
+  ( GLabel(..)
   , GState(..)
   , GTree(..)
   ) where
 
 import Geneclocks.Tree.Phylo
-import qualified Data.Text as T
 import Geneclocks.Tree.Locus
 
 -- | Gene name.
-newtype GName = GName T.Text
+newtype GLabel a = GLabel a
 
 -- | A gene has a name and belongs to a locus.
-newtype GState = GState (GName, LName)
+newtype GState a = GState (GLabel a, LLabel a)
 
 -- | A gene tree is a binary tree, but genes have not only names but are also
 -- associated to species.
-newtype GTree = GTree (Tree GState)
+--
+-- TODO: Node type.
+newtype GTree a b c = GTree (PhyloTree (GState a) b c)

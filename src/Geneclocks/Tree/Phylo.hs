@@ -19,7 +19,6 @@ Phylogenetic trees are the basis of gene, locus and species trees.
 module Geneclocks.Tree.Phylo
   ( module Data.Tree
   , NodeType(..)
-  , PhyloNode(..)
   , Info(..)
   , PhyloTree
   , singleton
@@ -35,9 +34,9 @@ module Geneclocks.Tree.Phylo
   , isReconstructed
   ) where
 
-import           Control.DeepSeq
+import           Control.DeepSeq (NFData)
 import           Data.Tree
-import           GHC.Generics                     (Generic)
+import           GHC.Generics    (Generic)
 
 -- | Nodes should have a notion of where they are on the tree and a default state.
 class NodeType n where
@@ -48,24 +47,6 @@ class NodeType n where
   defaultInternal :: n
 
   internal n = not $ extant n || extinct n
-
--- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
--- necessary because it can be deduced from the tree. However, it is convenient
--- to save the type in this way.
-data PhyloNode = Internal            -- ^ Internal node.
-               | Extant              -- ^ Extant leaf.
-               | Extinct             -- ^ Extinct leaf.
-               deriving (Eq, Read, Show, Generic, NFData)
-
-instance NodeType PhyloNode where
-  extant   Extant   = True
-  extant   _        = False
-  extinct  Extinct  = True
-  extinct  _        = False
-  internal Internal = True
-  internal _        = False
-  defaultExternal   = Extant
-  defaultInternal   = Internal
 
 -- | Node state of a phylogenetic tree. It contains a label of unspecified type
 -- 'a', the branch length to the parent node or the origin of the tree and

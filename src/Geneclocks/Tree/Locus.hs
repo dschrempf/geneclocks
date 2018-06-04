@@ -15,21 +15,22 @@ locus. We do not have this information.
 -}
 
 module Geneclocks.Tree.Locus
-  ( LName(..)
+  ( LLabel(..)
   , LState(..)
   , LTree(..)
   ) where
 
 import Geneclocks.Tree.Phylo
-import qualified Data.Text as T
 import Geneclocks.Tree.Species
 
 -- | Locus name.
-newtype LName = LName T.Text
+newtype LLabel a = LName a
 
 -- | A locus has a name and belongs to a species.
-newtype LState = LState (LName, SName)
+newtype LState a = LState (LLabel a, SLabel a)
 
 -- | A locus tree is a tree, but loci have not only names but are also
 -- associated to species.
-newtype LTree = LTree (Tree LState)
+--
+-- TODO: Node type.
+newtype LTree a b c = LTree (PhyloTree (LState a) b c)
