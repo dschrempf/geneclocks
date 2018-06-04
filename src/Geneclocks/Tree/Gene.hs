@@ -8,7 +8,10 @@
    Stability   :  unstable
    Portability :  non-portable (not tested)
 
-Definition of gene trees.
+Definition of gene trees. A gene tree describes the relationship of genes of the
+same gene family. Each gene can be assigned to a locus. Since this information
+is not available, I will not use gene trees at the moment. Rater, I will work
+with "GeneIndividual" trees, which combine the notion of gene and individual.
 
 -}
 

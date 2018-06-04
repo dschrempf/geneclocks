@@ -14,8 +14,6 @@ Creation date: Tue Feb 27 17:27:16 2018.
 See Gernhard, T. (2008). The conditioned reconstructed process. Journal of
 Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.005.
 
-TODO: Allow to specify seed value.
-
 TODO: lambda ~ mu.
 
 -}
@@ -33,7 +31,7 @@ import qualified Data.Text.IO                     as T
 import           Data.Vector                      (singleton)
 import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree,
                                                    simulateReconstructedTreeRandomHeight)
-import           Geneclocks.Tree.Phylo            (PhyloTree)
+import           Geneclocks.Tree.Phylo            (PhyloTree, PhyloNode)
 import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
 import           Geneclocks.Tree.PhyloSumStat     (toNChildSumStat, formatNChildSumStat)
 import           Options.Applicative
@@ -203,7 +201,7 @@ main = do
            else parMap rpar toNewickIntegral trs
   T.putStr $ T.unlines ls
 
-simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double]
+simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double PhyloNode]
 simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
   trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
   trsRem <- simulateNTrees (t `mod` c) n h l m v s
@@ -211,7 +209,7 @@ simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
                -> Maybe Int
-               -> IO [PhyloTree Int Double]
+               -> IO [PhyloTree Int Double PhyloNode]
 simulateNTrees t n mH l m v s
   | t <= 0 = return []
   | otherwise = do

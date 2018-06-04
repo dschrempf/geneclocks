@@ -8,7 +8,9 @@
    Stability   :  unstable
    Portability :  non-portable (not tested)
 
-Definition of locus trees.
+Definition of locus trees. The concept of a locus tree is only needed, when
+information about loci is available. That is, when we can assign each gene to a
+locus. We do not have this information.
 
 -}
 

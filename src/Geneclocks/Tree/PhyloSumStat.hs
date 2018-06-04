@@ -52,8 +52,9 @@ formatNChildSumStatLine (l, n) = B.decimal n
                                  <> B.singleton '\n'
 
 -- | Compute NChilSumStat for a phylogenetic tree.
-toNChildSumStat :: PhyloTree a Double -> NChildSumStat
-toNChildSumStat (Node (Info _ b Extant) _) = [(b, 1)]
-toNChildSumStat (Node (Info _ b _)    chs) = (b, sumCh) : (concat nChSS)
+toNChildSumStat :: (NodeType c) => PhyloTree a Double c -> NChildSumStat
+toNChildSumStat (Node (Info _ b n) chs)
+  | extant n = [(b, 1)]
+  | otherwise = (b, sumCh) : concat nChSS
   where nChSS = map toNChildSumStat chs
         sumCh = sum $ map (snd . head) nChSS

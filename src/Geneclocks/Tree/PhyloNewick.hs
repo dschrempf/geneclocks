@@ -30,23 +30,23 @@ import qualified Geneclocks.Tools                 as Tools
 import           Geneclocks.Tree.Phylo
 
 -- | Convert a phylogenetic tree with text node labels into a Newick text object.
-toNewickText :: (RealFloat b) => PhyloTree T.Text b -> T.Text
+toNewickText :: (RealFloat b) => PhyloTree T.Text b c -> T.Text
 toNewickText = toNewickWith id Tools.realFloatToText
 
 -- | Convert a phylogenetic tree with string node labels into a Newick text object.
-toNewickString :: (RealFloat b) => PhyloTree String b -> T.Text
+toNewickString :: (RealFloat b) => PhyloTree String b c -> T.Text
 toNewickString = toNewickWith T.pack Tools.realFloatToText
 
 -- | Convert a phylogenetic tree with integral node labels into a Newick text
 -- object. This function is preferable because it uses the text builder and is
 -- much faster.
-toNewickIntegral :: (Integral a, RealFloat b) => PhyloTree a b -> T.Text
+toNewickIntegral :: (Integral a, RealFloat b) => PhyloTree a b c -> T.Text
 toNewickIntegral t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal B.realFloat t
 
 -- | General conversion of a tree into a Newick string in form of a text object.
 -- Use provided functions to convert node states and branches to text objects.
 -- See also Biobase.Newick.Export.
-toNewickWith :: (a -> T.Text) -> (b -> T.Text)-> PhyloTree a b -> T.Text
+toNewickWith :: (a -> T.Text) -> (b -> T.Text)-> PhyloTree a b c -> T.Text
 toNewickWith f g t = go t `T.append` T.pack ";"
   where
     go (Node s [])   = lbl s
@@ -59,7 +59,7 @@ toNewickWith f g t = go t `T.append` T.pack ";"
 -- | General conversion of a tree into a Newick string in form of a text object.
 -- Use provided text builders to convert node states and branches to text
 -- objects.
-toNewickWithBuilder :: (a -> B.Builder) -> (b -> B.Builder) -> PhyloTree a b -> B.Builder
+toNewickWithBuilder :: (a -> B.Builder) -> (b -> B.Builder) -> PhyloTree a b c -> B.Builder
 toNewickWithBuilder f g t = go t `mappend` B.singleton ';'
   where
     go (Node s [])   = lbl s

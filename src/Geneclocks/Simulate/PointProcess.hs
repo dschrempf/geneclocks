@@ -92,12 +92,12 @@ fAcc is i = (i:is, i')
 -- | Same as 'simulateReconstructedTree' but tree height is drawn from the
 -- expected distribution. See 'TOD.TimeOfOriginDistribution'.
 simulateReconstructedTreeRandomHeight
-  :: (PrimMonad m)
+  :: (PrimMonad m, NodeType c)
   => Int              -- ^ Number of points (samples)
   -> BirthRate        -- ^ Birth rate
   -> DeathRate        -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
-  -> m (PhyloTree Int Double)
+  -> m (PhyloTree Int Double c)
 simulateReconstructedTreeRandomHeight n l m g = do
   t <- D.genContVar (TOD n l m) g
   simulateReconstructedTree n t l m g
@@ -106,13 +106,13 @@ simulateReconstructedTreeRandomHeight n l m g = do
 -- 'toReconstructedTree') with specific height and number of leaves according to
 -- the birth and death process.
 simulateReconstructedTree
-  :: (PrimMonad m)
+  :: (PrimMonad m, NodeType c)
   => Int             -- ^ Number of points (samples)
   -> Time            -- ^ Time of origin
   -> BirthRate       -- ^ Birth rate
   -> DeathRate       -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
-  -> m (PhyloTree Int Double)
+  -> m (PhyloTree Int Double c)
 simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l m g
 
 -- | Convert a point process to a reconstructed tree. See Lemma 2.2. Of course,
@@ -125,10 +125,10 @@ simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l 
 
 -- I wanted to use a Monoid constraint to get the unit element, but this
 -- fails for classical 'Int's. So, I rather have another (useless) argument.
-toReconstructedTree :: (Num b, Ord b)
+toReconstructedTree :: (Num b, Ord b, NodeType c)
                        => a     -- ^ Default node state.
                        -> PointProcess a b
-                       -> PhyloTree a b
+                       -> PhyloTree a b c
 toReconstructedTree defLabel pp@(PointProcess ps vs o)
   | length ps /= length vs + 1 = error "Too few or too many points."
   | length vs <= 1             = error "Too few values."
@@ -141,13 +141,13 @@ toReconstructedTree defLabel pp@(PointProcess ps vs o)
         !treeOrigin = lengthen (o-h) treeRoot
 
 -- Move up the tree, connect nodes when they join according to the point process.
-toReconstructedTree' :: (Num b, Ord b)
+toReconstructedTree' :: (Num b, Ord b, NodeType c)
                      => a       -- Default node state.
                      -> [Int]   -- Sorted indices, see 'sort'.
                      -> [b]     -- Sorted merge values.
-                     -> [PhyloTree a b] -- Leaves with accumulated root branch lengths.
+                     -> [PhyloTree a b c] -- Leaves with accumulated root branch lengths.
                      -> [b]             -- Accumulated heights of the leaves.
-                     -> PhyloTree a b
+                     -> PhyloTree a b c
 toReconstructedTree' _        [] [] trs  _ = head trs
 toReconstructedTree' defLabel is vs trs hs = toReconstructedTree' defLabel is' vs' trs'' hs'
   -- For the algorithm, see 'Geneclocks.Coalescent.simulate', but index starts
@@ -164,7 +164,7 @@ toReconstructedTree' defLabel is vs trs hs = toReconstructedTree' defLabel is' v
         !tl    = lengthen dvl $ trs !! i
         !tr    = lengthen dvr $ trs !! (i+1)
         !h'    = hl + dvl       -- Should be the same as 'hr + dvr'.
-        !tm    = glue (Info defLabel 0 Internal) [tl, tr]
+        !tm    = glue (Info defLabel 0 defaultInternal) [tl, tr]
         !trs'' = take i trs ++ [tm] ++ drop (i+2) trs
         !hs'   = take i hs ++ [h'] ++ drop (i+2) hs
 
