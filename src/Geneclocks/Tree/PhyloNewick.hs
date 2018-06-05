@@ -25,7 +25,6 @@ import qualified Data.Text                        as T
 import qualified Data.Text.Lazy                   as T (toStrict)
 import qualified Data.Text.Lazy.Builder           as B
 import qualified Data.Text.Lazy.Builder.Int       as B
-import qualified Data.Text.Lazy.Builder.RealFloat as B
 import qualified Geneclocks.Tools                 as Tools
 import           Geneclocks.Tree.Phylo
 
@@ -41,7 +40,7 @@ toNewickString = toNewickWith T.pack Tools.realFloatToText
 -- object. This function is preferable because it uses the text builder and is
 -- much faster.
 toNewickIntegral :: (Integral a, RealFloat b) => PhyloTree a b c -> T.Text
-toNewickIntegral t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal B.realFloat t
+toNewickIntegral t = T.toStrict $ B.toLazyText $ toNewickWithBuilder B.decimal Tools.realFloatBuilder t
 
 -- | General conversion of a tree into a Newick string in form of a text object.
 -- Use provided functions to convert node states and branches to text objects.

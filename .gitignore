@@ -3,3 +3,6 @@ geneclocks.cabal
 *~
 /TAGS
 /simulate-trees.*
+/GPATH
+/GRTAGS
+/GTAGS

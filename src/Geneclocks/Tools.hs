@@ -24,6 +24,9 @@ module Geneclocks.Tools
   , fstOfThree
   , sndOfThree
   , trdOfThree
+  , showRoundedFloatPrec
+  , showRoundedFloat
+  , realFloatBuilder
   )
   where
 
@@ -34,6 +37,7 @@ import qualified Data.Text.Lazy                   as T (toStrict)
 import qualified Data.Text.Lazy.Builder           as B
 import qualified Data.Text.Lazy.Builder.Int       as B
 import qualified Data.Text.Lazy.Builder.RealFloat as B
+import           Numeric
 
 -- | Convert a float value to a text object.
 realFloatToText :: RealFloat a => a -> T.Text
@@ -70,3 +74,18 @@ sndOfThree (_, x, _) = x
 -- | The third element of a three-Tuple.
 trdOfThree :: (a, b, c) -> c
 trdOfThree (_, _, x) = x
+
+-- | Show a real float with precision 'n'.
+showRoundedFloatPrec :: RealFloat a => Int -> a -> String
+showRoundedFloatPrec n d = showFFloat (Just n) d ""
+
+precision :: Maybe Int
+precision = Just 6
+
+-- | Show a real float with globally defined 'precision'.
+showRoundedFloat :: RealFloat a => a -> String
+showRoundedFloat d = showFFloat precision d ""
+
+-- | Text builder of real float with globally defined 'precision'.
+realFloatBuilder :: RealFloat a => a -> B.Builder
+realFloatBuilder = B.formatRealFloat B.Generic precision

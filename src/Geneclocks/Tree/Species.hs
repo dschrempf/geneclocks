@@ -17,7 +17,7 @@ Definition of species trees.
 
 module Geneclocks.Tree.Species
   ( SLabel(..)
-  , STree(..)
+  , STree
   , SNode(..)
   ) where
 
@@ -47,4 +47,4 @@ instance NodeType SNode where
   defaultInternal   = Internal
 
 -- | A species tree is just a binary tree with text as node labels and branch lengths.
-newtype STree a b = STree (PhyloTree (SLabel a) b SNode)
+type STree a b = PhyloTree (SLabel a) b SNode

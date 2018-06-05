@@ -43,20 +43,20 @@ module Geneclocks.Tree.GeneIndividual
   , GLabel(..)
   , GState(..)
   , GNode(..)
-  , GITree(..)
+  , GITree
+  , agree
   ) where
 
 import           Control.DeepSeq
 import           Geneclocks.Tree.Phylo
-import qualified Geneclocks.Tree.Species as S
+import           Geneclocks.Tree.Species
 import           GHC.Generics            (Generic)
 
 -- | Individual name.
 newtype ILabel a = ILabel a
 
 -- | State of individual.
--- TODO: S.SLabel??
-newtype IState a = IState (ILabel a, S.SLabel a)
+newtype IState a = IState (ILabel a, SLabel a)
 
 -- | Gene name.
 newtype GLabel a = GLabel a
@@ -65,24 +65,40 @@ newtype GLabel a = GLabel a
 newtype GState a = GIState (GLabel a, IState a)
 
 -- | Node types for genes on individuals.
-data GNode = Duplication       -- The daughters arise due to a duplication.
-            | Coalescence       -- The daughters arise because the individuals
-                                -- reproduce (or coalesce).
-            | Extant            -- Extant leaf.
-            | Extinct           -- Extinct leaf (probably not necessary, but why not).
+data GNode = GDuplication  -- The daughters arise due to a duplication.
+            | GCoalescence -- The daughters arise because the individuals
+                           -- reproduce (or coalesce).
+            | GExtant      -- Extant leaf.
+            | GExtinct     -- Extinct leaf (probably not necessary, but why not).
             deriving (Eq, Read, Show, Generic, NFData)
 
 instance NodeType GNode where
-  extant Extant = True
-  extant _      = False
-  extinct Extinct = True
-  extinct _       = False
-  defaultExternal = Extant
-  defaultInternal = Duplication
+  extant GExtant   = True
+  extant _         = False
+  extinct GExtinct = True
+  extinct _        = False
+  defaultExternal  = GExtant
+  defaultInternal  = GDuplication
 
 -- | A gene individual tree.
-newtype GITree a b = GITree (PhyloTree (GState a) b GNode)
+type GITree a b = PhyloTree (GState a) b GNode
 
 -- | Check if a gene individual tree is valid.
--- valid :: GITree a b -> Bool
+--
+-- Performed checks:
+--
+--   - Validity of gene individual tree.
+--
+--   - Validity of species tree.
+--
+--   - No coalescence of any pair of genes before the respective species
+--     coalesce.
+--
+--   - (Number of coalescent events) == (Number of genes - 1).
+--
+--   - Each gene has to coalesce at least once. THIS IS WRONG. Only, if I
+--     introduce degree two nodes at the time slice of coalescence, at all
+--     lineages.
 
+agree :: GITree a b -> STree a b -> Bool
+agree gi s = valid gi && valid s

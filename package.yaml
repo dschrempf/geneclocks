@@ -37,6 +37,8 @@ dependencies:
 - text >= 1.2.2
 - vector
 - math-functions
+- transformers
+- monad-logger
 
 library:
   source-dirs: src

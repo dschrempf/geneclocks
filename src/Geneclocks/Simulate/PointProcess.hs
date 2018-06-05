@@ -125,7 +125,7 @@ simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l 
 
 -- I wanted to use a Monoid constraint to get the unit element, but this
 -- fails for classical 'Int's. So, I rather have another (useless) argument.
-toReconstructedTree :: (Num b, Ord b, NodeType c)
+toReconstructedTree :: (Ord a, Num b, Ord b, NodeType c)
                        => a     -- ^ Default node state.
                        -> PointProcess a b
                        -> PhyloTree a b c
