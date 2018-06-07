@@ -27,11 +27,15 @@ module Geneclocks.Tools
   , showRoundedFloatPrec
   , showRoundedFloat
   , realFloatBuilder
+  , isSingleton
+  , isPairwiseDistinct
+  , defPrecision
   )
   where
 
 import           Data.Function
 import           Data.List
+import qualified Data.Set                         as S
 import qualified Data.Text                        as T
 import qualified Data.Text.Lazy                   as T (toStrict)
 import qualified Data.Text.Lazy.Builder           as B
@@ -79,13 +83,22 @@ trdOfThree (_, _, x) = x
 showRoundedFloatPrec :: RealFloat a => Int -> a -> String
 showRoundedFloatPrec n d = showFFloat (Just n) d ""
 
-precision :: Maybe Int
-precision = Just 6
+-- | Global default precision.
+defPrecision :: Maybe Int
+defPrecision = Just 6
 
--- | Show a real float with globally defined 'precision'.
+-- | Show a real float with globally defined 'defPrecision'.
 showRoundedFloat :: RealFloat a => a -> String
-showRoundedFloat d = showFFloat precision d ""
+showRoundedFloat d = showFFloat defPrecision d ""
 
--- | Text builder of real float with globally defined 'precision'.
+-- | Text builder of real float with globally defined 'defPrecision'.
 realFloatBuilder :: RealFloat a => a -> B.Builder
-realFloatBuilder = B.formatRealFloat B.Generic precision
+realFloatBuilder = B.formatRealFloat B.Generic defPrecision
+
+-- | Check if a set is a singleton.
+isSingleton :: S.Set a -> Bool
+isSingleton = (== 1) . S.size
+
+-- | Check if elements of a list are pairwise distinct.
+isPairwiseDistinct :: Ord a => [a] -> Bool
+isPairwiseDistinct l = S.size (S.fromList l) == length l

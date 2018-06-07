@@ -32,7 +32,7 @@ import           Geneclocks.Tree.Phylo            (PhyloTree)
 import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
 import           Geneclocks.Tree.PhyloSumStat     (formatNChildSumStat,
                                                    toNChildSumStat)
-import           Geneclocks.Tree.Species          (SNode)
+import           Geneclocks.Tree.Species          (SNodeType)
 import           Options.Applicative
 import qualified System.Environment               as Sys
 import           System.Random.MWC
@@ -200,7 +200,7 @@ main = do
            else parMap rpar toNewickIntegral trs
   T.putStr $ T.unlines ls
 
-simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double SNode]
+simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double SNodeType]
 simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
   trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
   trsRem <- simulateNTrees (t `mod` c) n h l m v s
@@ -208,7 +208,7 @@ simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool
                -> Maybe Int
-               -> IO [PhyloTree Int Double SNode]
+               -> IO [PhyloTree Int Double SNodeType]
 simulateNTrees t n mH l m v s
   | t <= 0 = return []
   | otherwise = do
