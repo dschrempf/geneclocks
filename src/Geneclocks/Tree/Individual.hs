@@ -26,10 +26,14 @@ TODO: What can be done to avoid re-computation of heights, leaf sets, and so on?
 module Geneclocks.Tree.Individual
   ( IName(..)
   , IState(..)
+  , iStateFromInts
+  , iStateToIName
+  , iStateToSName
   , INodeType(..)
   , coalescentString
   , ITree
-  , iStateFromInts
+  , iRootNodeIName
+  , iRootNodeSName
   , iAgree
   ) where
 
@@ -55,10 +59,10 @@ iStateFromInts :: Int -> Int -> IState Int
 iStateFromInts i s = IState (IName i, SName s)
 
 iStateToIName :: IState a -> IName a
-iStateToIName (IState (l, _)) = l
+iStateToIName (IState (n, _)) = n
 
 iStateToSName :: IState a -> SName a
-iStateToSName (IState (_, l)) = l
+iStateToSName (IState (_, n)) = n
 
 -- | Node types for individuals (on species).
 data INodeType =
@@ -93,13 +97,14 @@ instance NodeType INodeType where
 -- | A gene individual tree.
 type ITree a b = PhyloTree (IState a) b INodeType
 
+-- | Get the individual name of the root node state.
+iRootNodeIName :: ITree a b -> IName a
+iRootNodeIName = iStateToIName . rootNodeState
+
 -- | Get the species name of the root node state.
 iRootNodeSName :: ITree a b-> SName a
 iRootNodeSName = iStateToSName . rootNodeState
 
--- | Get the individual name of the root node state.
-iRootNodeIName :: ITree a b -> IName a
-iRootNodeIName = iStateToIName . rootNodeState
 
 -- | Check if an individual tree agrees with a species tree.
 --

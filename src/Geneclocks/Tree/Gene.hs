@@ -34,23 +34,26 @@ Questions:
   - Should the coalescent rate depend on the gene composition of the indivduals?
 
   - Should we just run a multispecies-like coalescent model for all of the genes
-    (i.e., free recombination, and some other assumptions)
+    (i.e., free recombination, and some other assumptions)?
 
-TODO: Idea, explicitely use an individual tree. This eases testing of the
-validity of a gene tree quite a lot.
-
+TODO: What can be done to avoid re-computation of heights, leaf sets, and so on?
 -}
 
 module Geneclocks.Tree.Gene
-  ( GLabel(..)
+  ( GName(..)
   , GState(..)
+  , gStateToGName
+  , gStateToIName
+  , gStateToSName
   , GNodeType(..)
   , duplicationString
   , GTree
+  , gRootNodeGName
+  , gRootNodeIName
+  , gRootNodeSName
   , gAgree
   ) where
 
--- import           Control.DeepSeq
 import qualified Data.Set                   as S
 import           Geneclocks.Tools
 import           Geneclocks.Tree.Individual
@@ -59,43 +62,39 @@ import           Geneclocks.Tree.Species
 import           GHC.Generics               (Generic)
 
 -- | Gene name.
-newtype GLabel a = GLabel a deriving (Eq, Ord)
+newtype GName a = GName a deriving (Eq, Ord)
 
 -- | A gene has a name and belongs to an individual.
-newtype GState a = GState (GLabel a, IState a) deriving (Eq, Ord)
+newtype GState a = GState (GName a, IState a) deriving (Eq, Ord)
 
--- gLabel :: GState a -> GLabel a
--- gLabel (GState (gl, _)) = gl
+-- | Extract gene name.
+gStateToGName :: GState a -> GName a
+gStateToGName (GState (n, _)) = n
 
-gStateToILabel :: GState a -> IName a
-gStateToILabel (GState (_, IState iState)) = fst iState
+-- | Extract individual name.
+gStateToIName :: GState a -> IName a
+gStateToIName (GState (_, IState iS)) = fst iS
 
-gStateToSLabel :: GState a -> SName a
-gStateToSLabel (GState (_, IState iState)) = snd iState
+-- | Extranct species name.
+gStateToSName :: GState a -> SName a
+gStateToSName (GState (_, IState iState)) = snd iState
 
 -- | Node types for genes (on individuals (on species)).
-
--- XXX: Before calculation of the likelihood for substitution models, all degree
--- two nodes have to be removed anyways... complicated.
-
--- Should we just ignore degree two nodes? But then, the notion that each gene
--- can be assigned to an individual and a species is difficult.
-
 data GNodeType a =
-  -- | By definition a degree two node. The underlying species merges, and
-  -- 'SLabel' changes to the one of the ancestor (if going backwards). XXX: Is
-  -- this necessary?
+  -- | Degree two node. The underlying species merges, and 'SName' changes to
+  -- the one of the ancestor (if going backwards).
   GSCoalescence
-  -- | Individuals coalesce. A coalescence of individuals changes the 'ILabel'.
+  -- | Individuals coalesce. A coalescence of individuals changes the 'IName'.
   -- This event involves at least two daughter lineages.
   | GICoalescence
-  -- | By definition a degree two node; a coalescent event of individuals
-  -- without an observed partner gene lineage, because it was lost somewhere on
-  -- the tree. The problem is, that we need to record the individual that this
-  -- coalescent event happened with.
+  -- | Degree two node; a coalescent event of individuals without an observed
+  -- partner gene lineage, because it was lost somewhere on the tree. The
+  -- problem is, that we need to record the individual that this coalescent
+  -- event happened with. TODO: Proper, unambiguous handling of daughter
+  -- individual states. Changes 'IName'.
   | GICoalescenceLoss (IState a)
   -- | The daughters arise due to a duplication. A duplication changes the
-  -- 'GLabel', but leaves 'SLabel' and 'ILabel' unchanged.
+  -- 'GName', but leaves 'SName' and 'IName' unchanged.
   | GDuplication
   | GExtinct -- ^ Extinct leaf (probably not necessary, but why not).
   | GExtant  -- ^ Extant leaf.
@@ -124,6 +123,18 @@ instance (Eq a) => NodeType (GNodeType a) where
 -- | A gene individual tree.
 type GTree a b = PhyloTree (GState a) b (GNodeType a)
 
+-- | Extract name of gene of root node.
+gRootNodeGName :: GTree a b -> GName a
+gRootNodeGName = gStateToGName . rootNodeState
+
+-- | Extract name of individual of root node.
+gRootNodeIName :: GTree a b -> IName a
+gRootNodeIName = gStateToIName . rootNodeState
+
+-- | Extract name of species of root node.
+gRootNodeSName :: GTree a b -> SName a
+gRootNodeSName = gStateToSName . rootNodeState
+
 -- | Check if a gene individual tree is valid.
 --
 -- Performed checks:
@@ -140,7 +151,7 @@ type GTree a b = PhyloTree (GState a) b (GNodeType a)
 --   - Each gene has to coalesce at least once. THIS IS WRONG. Only, if I
 --     introduce degree two nodes in all lineages at the time slice of each
 --     coalescence.
-
+-- TODO.
 gAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => GTree a b -> ITree a b -> STree a b -> Bool
 gAgree g i s = valid g && iAgree i s && gCheckHeightsNSplits s (heightsNSplits g)
 
@@ -169,17 +180,14 @@ gCheckHeightNSplit s (h, g)
   | otherwise           = error "GINodeType did not patter match. Weird."
   -- TODO: Check that coalescent events happen at the same time.
   where
-    gn = rootLabel g
-    gs = gStateToSLabel . state $ gn
-    gi = gStateToILabel . state $ gn
-    gt = nodeType gn
+    gs = gRootNodeSName g
+    gi = gRootNodeIName g
+    gt = rootNodeType g
     gDaughters = subForest g
     nDaughters = length gDaughters
-    daughterSpecies = S.fromList $ map (gStateToSLabel . rootNodeState) gDaughters
-    daughterIndividualL = map (gStateToILabel . rootNodeState) gDaughters
+    daughterSpecies = S.fromList $ map (gStateToSName . rootNodeState) gDaughters
+    daughterIndividualL = map (gStateToIName . rootNodeState) gDaughters
     daughterIndividuals = S.fromList daughterIndividualL
 
 -- TODO: Test this!
 
--- TODO: What can be done to avoid re-computation of heights, leaf sets, and so
---       on?
