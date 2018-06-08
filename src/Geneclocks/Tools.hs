@@ -85,7 +85,7 @@ showRoundedFloatPrec n d = showFFloat (Just n) d ""
 
 -- | Global default precision.
 defPrecision :: Maybe Int
-defPrecision = Just 6
+defPrecision = Just 5
 
 -- | Show a real float with globally defined 'defPrecision'.
 showRoundedFloat :: RealFloat a => a -> String

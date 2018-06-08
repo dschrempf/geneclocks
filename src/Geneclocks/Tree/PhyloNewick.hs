@@ -31,7 +31,7 @@ import           Geneclocks.Tree.Phylo
 -- | General conversion of a tree into a Newick string in form of a text object.
 -- Use provided functions to convert node labels to node and branch length text
 -- objects. See also Biobase.Newick.Export.
-toNewick :: (PhyloLabel a) => Tree a -> T.Text
+toNewick :: (BuilderLabel a) => Tree a -> T.Text
 toNewick t = T.toStrict $ B.toLazyText $ go t <> B.singleton ';'
   where
     go (Node l [])   = lbl l
@@ -59,4 +59,4 @@ toNewickWithBuilder f g t = go t `mappend` B.singleton ';'
     go (Node s ts)   = B.singleton '(' `mappend`
                          mconcat (intersperse (B.singleton ',') $ map go ts)
                          `mappend` B.singleton ')' `mappend` lbl s
-    lbl (Info s l _) = f s `mappend` B.singleton ':' `mappend` g l
+    lbl (PhyloLabel s l _) = f s `mappend` B.singleton ':' `mappend` g l

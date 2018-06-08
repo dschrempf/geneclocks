@@ -26,16 +26,21 @@ module Geneclocks.Tree.Phylo
   , wrap
   , extantString
   , extinctString
+  , BuilderLabel(..)
   , PhyloLabel(..)
-  , Info(..)
   , PhyloTree
-  , rootNode
-  , degree
+  , rootNodeState
+  , rootNodeBrLn
+  , rootNodeType
+  , rootDegree
   , rootNodesAgree
   , singleton
   , valid
   , totalBrLn
   , height
+  , clockLike
+  , distancesRootExtantLeaves
+  , heightClockLike
   , heightOfRootNode
   , glue
   , shorten
@@ -50,21 +55,22 @@ module Geneclocks.Tree.Phylo
   , mrcaHeightNNode
   , mrcaHeightNTree
   , numberInternalNodes
+  , numberNodes
   , heightsNSplits
   , heightsNSplitsFast
   , heightsNSplitsOrdered
   , pairwiseDistinctNodesF
-  , pairwiseDistinctNodeLabels
+  , pairwiseDistinctNodeStates
   , pairwiseDistinctLeaveLabels
   ) where
 
 import           Control.DeepSeq                  (NFData)
+import           Data.Foldable
 import           Data.Function                    (on)
 import           Data.List
 import           Data.Monoid
 import qualified Data.Set                         as S
 import qualified Data.Text.Lazy.Builder           as B
-import qualified Data.Text.Lazy.Builder.RealFloat as B
 import           Data.Tree
 import           Geneclocks.Tools
 import           GHC.Generics                     (Generic)
@@ -81,6 +87,15 @@ class (Eq n) => NodeType n where
   internal n = not $ extant n || extinct n
   external   = not . internal
 
+-- | Node state of a phylogenetic tree. It contains a label of unspecified type
+-- 'a', the branch length to the parent node or the origin of the tree and
+-- information if the node type is internal, extinct and extant.'
+data PhyloLabel a b c = PhyloLabel
+  { state     :: a            -- ^ The label of the node, e.g., Int or String.
+  , brLn     :: b            -- ^ The branch length to the parent node or the origin.
+  , nodeType :: c            -- ^ Node type (e.g., 'SNode', but see "GeneIndividual").
+  } deriving (Eq, Show, Generic, NFData)
+
 -- | A unified way to show information about nodes.
 wrap :: Char -> String
 wrap c = '[' : c : "]"
@@ -94,54 +109,53 @@ extinctString :: String
 extinctString = wrap 'X'
 
 -- | Extract node information and branch length information from a phylogenetic tree.
-class PhyloLabel l where
+class BuilderLabel l where
   nodeBuilder :: l -> B.Builder
   brLnBuilder :: l -> B.Builder
 
--- | Node state of a phylogenetic tree. It contains a label of unspecified type
--- 'a', the branch length to the parent node or the origin of the tree and
--- information if the node type is internal, extinct and extant.'
-data Info a b c = Info
-  { label    :: a            -- ^ The label of the node, e.g., Int or String.
-  , brLn     :: b            -- ^ The branch length to the parent node or the origin.
-  , nodeType :: c            -- ^ Node type (e.g., 'SNode', but see "GeneIndividual").
-  } deriving (Eq, Show, Generic, NFData)
+instance (Show a, Show c, RealFloat b) => BuilderLabel (PhyloLabel a b c) where
+  nodeBuilder (PhyloLabel a _ c) = B.fromString (show c) <> B.fromString (show a)
+  brLnBuilder (PhyloLabel _ b _) = realFloatBuilder b
 
-instance (Show a, Show c, RealFloat b) => PhyloLabel (Info a b c) where
-  nodeBuilder (Info a _ c) = B.fromString (show c) <> B.fromString (show a)
-  brLnBuilder (Info _ b _) = B.realFloat b
+instance (Ord a, Eq b, Eq c) => Ord (PhyloLabel a b c) where
+  compare (PhyloLabel a _ _) (PhyloLabel b _ _) = compare a b
 
-instance (Ord a, Eq b, Eq c) => Ord (Info a b c) where
-  compare (Info a _ _) (Info b _ _) = compare a b
+-- | Phylogenetic tree data type. The node states are of type 'PhyloLabel a'.
+type PhyloTree a b c = Tree (PhyloLabel a b c)
 
--- | Phylogenetic tree data type. The node states are of type 'Info a'.
-type PhyloTree a b c = Tree (Info a b c)
+-- | Get state of root node.
+rootNodeState :: PhyloTree a b c -> a
+rootNodeState = state . rootLabel
 
--- | Get rid of the misnomer 'rootLabel', it actually should be called rootNode.
-rootNode :: Tree a -> a
-rootNode = rootLabel
+-- | Get length of branch connected to the root node.
+rootNodeBrLn :: PhyloTree a b c -> b
+rootNodeBrLn = brLn . rootLabel
+
+-- | Get node type of root node.
+rootNodeType :: PhyloTree a b c -> c
+rootNodeType = nodeType . rootLabel
 
 -- | Get the root nodes of the sub forest.
-daughtersRootNodes :: PhyloTree a b c -> [a]
-daughtersRootNodes t = map (label . rootNode) (subForest t)
+rootNodeStatesOfDaughters :: PhyloTree a b c -> [a]
+rootNodeStatesOfDaughters t = map rootNodeState (subForest t)
 
 -- | Get degree of the root node. The degree is the number of daughters + 1.
-degree :: PhyloTree a b c -> Int
-degree t = length (subForest t) + 1
+rootDegree :: PhyloTree a b c -> Int
+rootDegree t = length (subForest t) + 1
 
 -- | For two phylogenetic trees, extract information from the root node and
 -- check if it coincides. Useful to test if speciations agree, see 'iCheckHeightNSplit'.
 rootNodesAgree :: (Ord a)
                => (a1 -> a) -> (a2 -> a) -> PhyloTree a1 b1 c1 -> PhyloTree a2 b2 c2 -> Bool
 rootNodesAgree fs ft s t = sN == tN && S.null (S.difference sDNs tDNs)
-  where sN = fs $ (label . rootNode) s
-        sDNs = S.fromList $ map fs $ daughtersRootNodes s
-        tN = ft $ (label . rootNode) t
-        tDNs = S.fromList $ map ft $ daughtersRootNodes t
+  where sN = fs $ rootNodeState s
+        sDNs = S.fromList $ map fs $ rootNodeStatesOfDaughters s
+        tN = ft $ rootNodeState t
+        tDNs = S.fromList $ map ft $ rootNodeStatesOfDaughters t
 
 -- | The simplest tree. Usually an extant leaf with an attached branch.
 singleton :: (NodeType c) => a -> b -> PhyloTree a b c
-singleton a b = Node (Info a b defaultExternal) []
+singleton a b = Node (PhyloLabel a b defaultExternal) []
 
 -- | Test if a tree is valid. Validity of a tree does not guarantee that it
 -- agrees with certain constraints such as a tree of individuals necessarily
@@ -151,11 +165,11 @@ singleton a b = Node (Info a b defaultExternal) []
 --     - internal nodes with daughters.
 --     - pairwise distinct node labels.
 valid :: (Ord a, NodeType c) => PhyloTree a b c -> Bool
-valid t = pairwiseDistinctNodeLabels t && valid' t
+valid t = pairwiseDistinctNodeStates t && valid' t
 
 valid' :: (NodeType c) => PhyloTree a b c -> Bool
-valid' (Node (Info _ _ n) []) = extant n || extinct n
-valid' (Node (Info _ _ n) ts) = internal n && all valid' ts
+valid' (Node (PhyloLabel _ _ n) []) = extant n || extinct n
+valid' (Node (PhyloLabel _ _ n) ts) = internal n && all valid' ts
 
 -- | Total branch length of a tree.
 totalBrLn :: (Num b) => PhyloTree a b c -> b
@@ -163,12 +177,34 @@ totalBrLn (Node s ts) = brLn s + sum (map totalBrLn ts)
 
 -- | The height of the tree (the maximum branch length from root to leaves).
 height :: (Num b, Ord b, NodeType c) => PhyloTree a b c -> b
-height (Node s ts)
-  | external . nodeType $ s = brLn s
-  | otherwise               = maximum $ map ((+ brLn s) . height) ts
+height t
+  | external . rootNodeType $ t = rootNodeBrLn t
+  | otherwise               = maximum $ map ((+ rootNodeBrLn t) . height) (subForest t)
 
--- TODO: Height function for clock-like trees. Much faster, because one only
--- needs to traverse tree until first extant node.
+-- | Check if a tree is clock-like, i.e., when the distances between the root
+-- and extant leaves are equal .
+clockLike :: (Eq b, Num b, NodeType c) => PhyloTree a b c -> Bool
+clockLike t = all (== head ds) (tail ds)
+  where ds = distancesRootExtantLeaves t
+
+-- | Get the distances from the root to all extant leaves.
+distancesRootExtantLeaves :: (Num b, NodeType c) => PhyloTree a b c -> [b]
+distancesRootExtantLeaves t
+  | extant . rootNodeType $ t = [bl]
+  | otherwise                 = concatMap (map (+ bl) . distancesRootExtantLeaves) (subForest t)
+    where bl = rootNodeBrLn t
+
+-- | Get height of clock-like tree, i.e., when the distances between the root and
+-- extant leaves are equal . This function returns the distance between the root
+-- and the first extant leaf it finds, so the behavior is undefined when the
+-- tree is NOT clock-like.
+heightClockLike :: (Num b, NodeType c) => PhyloTree a b c -> Maybe b
+heightClockLike t
+  | extant . rootNodeType $ t  = Just bl
+  | extinct . rootNodeType $ t = Nothing
+  -- 'asum' takes the first Just value.
+  | otherwise                  = asum $ map (fmap (+ bl) . heightClockLike) (subForest t)
+  where bl = rootNodeBrLn t
 
 -- | Height of the tree without adding the root branch.
 heightOfRootNode :: (Num b, Ord b, NodeType c) => PhyloTree a b c -> b
@@ -178,65 +214,63 @@ heightOfRootNode t@(Node s _) = height t - brLn s
 -- | Glue branches together, so that one new tree emerges. It's root node is
 -- new, the sub-forest has to be given (a list of trees).
 glue :: (NodeType c)
-     => Info a b c             -- ^ New root node.
+     => PhyloLabel a b c             -- ^ New root node.
      -> [PhyloTree a b c]      -- ^ Sub-forest.
      -> PhyloTree a b c
-glue s@(Info _ _ n) ts
+glue s@(PhyloLabel _ _ n) ts
   | extant n  = error "Root node cannot be of type 'Exant'."
   | extinct n = error "Root node cannot be of type 'Extinct'."
   | otherwise = Node s ts
 
 -- | Shorten the distance between root and origin.
 shorten :: (Num b, Ord b) => b -> PhyloTree a b c -> PhyloTree a b c
-shorten dl (Node (Info s l n) ts) | dl <= l   = Node (Info s (l-dl) n) ts
+shorten dl (Node (PhyloLabel s l n) ts) | dl <= l   = Node (PhyloLabel s (l-dl) n) ts
                                   | otherwise = error "Branch lengths cannot be negative."
 
 -- | Lengthen the distance between root and origin.
 lengthen :: (Num b, Ord b) => b -> PhyloTree a b c -> PhyloTree a b c
-lengthen dl (Node (Info s l n) ts) | dl >= 0 = Node (Info s (l+dl) n) ts
+lengthen dl (Node (PhyloLabel s l n) ts) | dl >= 0 = Node (PhyloLabel s (l+dl) n) ts
                                    | otherwise = error "Branch lengths cannot be negative."
 
 -- | Tests if a tree has any extinct leaves. If not, it is considered to be a
 -- reconstructed tree structure.
-isReconstructed :: (Ord a, Eq b, NodeType c)
-                => PhyloTree a b c -> Bool
+isReconstructed :: (Ord a, Eq b, NodeType c) => PhyloTree a b c -> Bool
 isReconstructed t = not $ any (extinct . nodeType) (flatten t)
 
 -- | For a given tree, return a list of all leaves.
-getExtantLeaves :: NodeType c => PhyloTree a b c -> [Info a b c]
+getExtantLeaves :: NodeType c => PhyloTree a b c -> [PhyloLabel a b c]
 getExtantLeaves = getLeavesWith extant
 
 -- | For a given tree, return a list of all leaves.
-getExtinctLeaves :: NodeType c => PhyloTree a b c -> [Info a b c]
+getExtinctLeaves :: NodeType c => PhyloTree a b c -> [PhyloLabel a b c]
 getExtinctLeaves = getLeavesWith extinct
 
 -- | For a given tree, return a list of all leaves.
-getLeaves :: NodeType c => PhyloTree a b c -> [Info a b c]
+getLeaves :: NodeType c => PhyloTree a b c -> [PhyloLabel a b c]
 getLeaves t = getExtantLeaves t ++ getExtinctLeaves t
 
-getLeavesWith :: (c -> Bool) -> PhyloTree a b c -> [Info a b c]
+getLeavesWith :: (c -> Bool) -> PhyloTree a b c -> [PhyloLabel a b c]
 getLeavesWith np (Node s ts)
   | np $ nodeType s = s : leaves
   | otherwise   = leaves
   where leaves = concatMap (getLeavesWith np) ts
 
--- getLeavesSet :: (Ord a, Eq b, NodeType c) => PhyloTree a b c -> S.Set (Info a b c)
+-- getLeavesSet :: (Ord a, Eq b, NodeType c) => PhyloTree a b c -> S.Set (PhyloLabel a b c)
 -- getLeavesSet t = S.fromList $ getLeaves t
 
 -- | Extract some value that needs to be unique for each node on the given tree.
-pairwiseDistinctNodesF :: Ord d => (Info a b c -> d) -> PhyloTree a b c -> Bool
-pairwiseDistinctNodesF f t = length myNodeInfos == length (S.fromList myNodeInfos)
+pairwiseDistinctNodesF :: Ord d => (PhyloLabel a b c -> d) -> PhyloTree a b c -> Bool
+pairwiseDistinctNodesF f t = length myNodeLabels == length (S.fromList myNodeLabels)
   where myNodes     = flatten t
-        myNodeInfos = map f myNodes
+        myNodeLabels = map f myNodes
 
 -- | Check if a tree has unique node labels.
-pairwiseDistinctNodeLabels :: (Ord a) => PhyloTree a b c -> Bool
-pairwiseDistinctNodeLabels = pairwiseDistinctNodesF label
+pairwiseDistinctNodeStates :: (Ord a) => PhyloTree a b c -> Bool
+pairwiseDistinctNodeStates = pairwiseDistinctNodesF state
 
 -- | Check if a tree has unique leaf labels.
 pairwiseDistinctLeaveLabels :: (Ord a, Eq b, NodeType c) => PhyloTree a b c -> Bool
-pairwiseDistinctLeaveLabels t = isPairwiseDistinct myLeaves
-  where myLeaves = getLeaves t
+pairwiseDistinctLeaveLabels = isPairwiseDistinct . getLeaves
 
 -- | Tree to most recent common ancestore of provided set of nodes.
 mrcaTree :: (Ord a, Eq b, NodeType c)
@@ -249,7 +283,7 @@ mrcaTree ls t
 
 containsMrca :: (Ord a, Eq b, NodeType c)
        => S.Set a -> PhyloTree a b c -> Bool
-containsMrca ls t = ls `S.isSubsetOf` S.fromList (map label (flatten t))
+containsMrca ls t = ls `S.isSubsetOf` S.fromList (map state (flatten t))
 
 -- Assumes that the mrca is on the tree.
 mrcaTreeUnsafe :: (Ord a, Eq b, NodeType c)
@@ -260,8 +294,8 @@ mrcaTreeUnsafe ls t = maybe t (mrcaTreeUnsafe ls) mMrcaDaughter
 
 -- | Most recent common ancestor of a set of leaves.
 mrcaNode :: (Ord a, Eq b, NodeType c)
-     => S.Set a -> PhyloTree a b c -> Maybe (Info a b c)
-mrcaNode ls t = rootNode <$> mrcaTree ls t
+     => S.Set a -> PhyloTree a b c -> Maybe (PhyloLabel a b c)
+mrcaNode ls t = rootLabel <$> mrcaTree ls t
 
 -- | Height of most recent common ancestor.
 mrcaHeight :: (Ord a, Ord b, Num b, NodeType c)
@@ -276,18 +310,25 @@ mrcaHeightNTree ls tr = maybe Nothing (\t -> Just (heightOfRootNode t, t)) mT
 
 -- | Height and node of MRCA.
 mrcaHeightNNode :: (Ord a, Ord b, Num b, NodeType c)
-                => S.Set a -> PhyloTree a b c -> Maybe (b, Info a b c)
-mrcaHeightNNode ls tr = maybe Nothing (\t -> Just (heightOfRootNode t, rootNode t)) mT
+                => S.Set a -> PhyloTree a b c -> Maybe (b, PhyloLabel a b c)
+mrcaHeightNNode ls tr = maybe Nothing (\t -> Just (heightOfRootNode t, rootLabel t)) mT
   where mT = mrcaTree ls tr
 
--- | Number internal nodes uniquely.
+-- | Number internal nodes pairwise distinctly.
 numberInternalNodes :: NodeType c => PhyloTree Int b c -> PhyloTree Int b c
-numberInternalNodes t = snd $ mapAccumL myAccumulator 0 t
+numberInternalNodes t = snd $ mapAccumL myAccumulatorInternalOnly 0 t
 
-myAccumulator :: NodeType c => Int -> Info Int b c -> (Int, Info Int b c)
-myAccumulator i n
-  | internal . nodeType $ n = (i+1, n {label = i})
+myAccumulatorInternalOnly :: NodeType c => Int -> PhyloLabel Int b c -> (Int, PhyloLabel Int b c)
+myAccumulatorInternalOnly i n
+  | internal . nodeType $ n = (i+1, n {state = i})
   | otherwise               = (i, n)
+
+-- | Number all nodes pairwise distinctly.
+numberNodes :: NodeType c => PhyloTree Int b c -> PhyloTree Int b c
+numberNodes t = snd $ mapAccumL myAccumulator 0 t
+
+myAccumulator :: NodeType c => Int -> PhyloLabel Int b c -> (Int, PhyloLabel Int b c)
+myAccumulator i n = (i+1, n {state = i})
 
 -- | Traverse a tree top down. For each split, report the corresponding subtree
 -- and root node height. Note that consecutive elements can be completely
@@ -303,11 +344,10 @@ heightsNSplitsFast h t = (h, t) : concatMap (heightsNSplits' h) (subForest t)
 heightsNSplits' :: (Num b, Ord b, NodeType c)
                        => b -> PhyloTree a b c -> [(b, PhyloTree a b c)]
 heightsNSplits' h t
-  | external . nodeType $ lb = []
+  | external . rootNodeType $ t = []
   | otherwise                = (h', t) : concatMap (heightsNSplits' h') (subForest t)
   where
-    lb = rootNode t
-    dH = brLn lb
+    dH = rootNodeBrLn t
     h' = h - dH
 
 -- | Same as 'heightsNSPlits' but ordered with respect to height, ascending.

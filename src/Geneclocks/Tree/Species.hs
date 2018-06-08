@@ -17,7 +17,7 @@ Definition of species trees.
 -}
 
 module Geneclocks.Tree.Species
-  ( SLabel(..)
+  ( SName(..)
   , STree
   , SNodeType(..)
   , speciationString
@@ -29,10 +29,10 @@ import           Geneclocks.Tree.Phylo
 import           GHC.Generics          (Generic)
 
 -- | Species name.
-newtype SLabel a = SLabel a deriving (Eq, Ord, Read, Generic, Enum, Num, Real, Integral)
+newtype SName a = SName a deriving (Eq, Ord, Read, Generic, Enum, Num, Real, Integral)
 
-instance Show a => Show (SLabel a) where
-  show (SLabel s) = "[S]" ++ show s
+instance Show a => Show (SName a) where
+  show (SName s) = "[S]" ++ show s
 
 -- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
 -- necessary because it can be deduced from the tree. However, it is convenient
@@ -61,8 +61,11 @@ instance Show SNodeType where
   show SExtant      = extantString
   show SExtinct     = extinctString
 
--- | A species tree is just a binary tree with text as node labels and branch lengths.
-type STree a b = PhyloTree (SLabel a) b SNodeType
+-- | A species tree is a tree with 'SName's as node states, and 'SNodeType's as
+-- node types. The node state is called name. This may be subject to change.
+-- However, e.g., for an individual tree, the state consists of both, the
+-- individual name and the species name.
+type STree a b = PhyloTree (SName a) b SNodeType
 
 -- -- | Get all speciations (Height, Tree) on a species tree.
 -- speciations :: (Num b, Ord b) => STree a b -> [(b, STree a b)]

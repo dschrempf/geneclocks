@@ -67,10 +67,10 @@ newtype GState a = GState (GLabel a, IState a) deriving (Eq, Ord)
 -- gLabel :: GState a -> GLabel a
 -- gLabel (GState (gl, _)) = gl
 
-gStateToILabel :: GState a -> ILabel a
+gStateToILabel :: GState a -> IName a
 gStateToILabel (GState (_, IState iState)) = fst iState
 
-gStateToSLabel :: GState a -> SLabel a
+gStateToSLabel :: GState a -> SName a
 gStateToSLabel (GState (_, IState iState)) = snd iState
 
 -- | Node types for genes (on individuals (on species)).
@@ -169,14 +169,14 @@ gCheckHeightNSplit s (h, g)
   | otherwise           = error "GINodeType did not patter match. Weird."
   -- TODO: Check that coalescent events happen at the same time.
   where
-    gn = rootNode g
-    gs = gStateToSLabel . label $ gn
-    gi = gStateToILabel . label $ gn
+    gn = rootLabel g
+    gs = gStateToSLabel . state $ gn
+    gi = gStateToILabel . state $ gn
     gt = nodeType gn
     gDaughters = subForest g
     nDaughters = length gDaughters
-    daughterSpecies = S.fromList $ map (gStateToSLabel . label . rootNode) gDaughters
-    daughterIndividualL = map (gStateToILabel . label . rootNode) gDaughters
+    daughterSpecies = S.fromList $ map (gStateToSLabel . rootNodeState) gDaughters
+    daughterIndividualL = map (gStateToILabel . rootNodeState) gDaughters
     daughterIndividuals = S.fromList daughterIndividualL
 
 -- TODO: Test this!

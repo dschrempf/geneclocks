@@ -53,7 +53,7 @@ simulate' n a trs g
             tl    = trs' !! (i-1)
             tr    = trs' !! i
             -- Join the two chosen trees.
-            tm    = glue (Info a 0.0 defaultInternal) [tl, tr]
+            tm    = glue (PhyloLabel a 0.0 defaultInternal) [tl, tr]
             -- Take the trees on the left, the merged tree, and the trees on the right.
             trs'' = take (i-1) trs' ++ [tm] ++ drop (i+1) trs'
         simulate' (n-1) a trs'' g

@@ -164,7 +164,7 @@ toReconstructedTree' defLabel is vs trs hs = toReconstructedTree' defLabel is' v
         !tl    = lengthen dvl $ trs !! i
         !tr    = lengthen dvr $ trs !! (i+1)
         !h'    = hl + dvl       -- Should be the same as 'hr + dvr'.
-        !tm    = glue (Info defLabel 0 defaultInternal) [tl, tr]
+        !tm    = glue (PhyloLabel defLabel 0 defaultInternal) [tl, tr]
         !trs'' = take i trs ++ [tm] ++ drop (i+2) trs
         !hs'   = take i hs ++ [h'] ++ drop (i+2) hs
 

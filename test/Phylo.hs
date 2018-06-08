@@ -19,13 +19,13 @@ tree10 :: (PrimMonad m) => m (PhyloTree Int Double SNodeType)
 tree10 = do
   g <- create
   t <- simulate 10 g
-  return $ numberInternalNodes t
+  return $ numberNodes t
 
 -- We test, if the most recent common ancestors are calculated correctly.
 leafSet :: S.Set Int
-leafSet = S.fromList [0, 1, 4]
+leafSet = S.fromList [5, 8, 10]
 
-mrcaNode3 :: PrimMonad m => m (Maybe (Info Int Double SNodeType))
+mrcaNode3 :: PrimMonad m => m (Maybe (PhyloLabel Int Double SNodeType))
 mrcaNode3 = mrcaNode leafSet <$> tree10
 
 mrcaTree3 :: PrimMonad m => m (Maybe (PhyloTree Int Double SNodeType))
@@ -38,24 +38,35 @@ performTests :: IO ()
 performTests = do
 
   announce "Simulated tree."
-  tStr <- T.unpack . toNewickIntegral <$> tree10
-  report tStr
+  tree <- tree10
+  report $ T.unpack . toNewick $ tree
+  if valid tree
+    then report "Tree is valid."
+    else error "Tree should be valid."
 
   announce $ "Most recent common ancestor of leaf set " ++ (show . S.toList) leafSet ++ "."
   m <- mrcaNode3
   report $ maybe (error "No MRCA.") show m
-  if (label <$> m) == Just 1 && ((internal . nodeType <$> m) == Just True)
+  if (state <$> m) == Just 1 && ((internal . nodeType <$> m) == Just True)
     then report "Should be 1, success."
     else error "Failure."
 
   announce "Corresponding subtrees."
   mT <- mrcaTree3
-  report $ maybe (error "No MRCA tree.") (T.unpack . toNewickIntegral) mT
+  report $ maybe (error "No MRCA tree.") (T.unpack . toNewick) mT
 
   announce "Heights with corresponding splits, ordered."
   ss <- splits
-  let ssDoc = Pp.vcat [(Pp.text . showRoundedFloat) h Pp.<>
-                        Pp.text ": " Pp.<>
-                        (Pp.text . T.unpack . toNewickIntegral $ t)
+  let ssDoc = Pp.vcat [(Pp.text . showRoundedFloat) h
+                       Pp.<> Pp.text ": "
+                       Pp.<> (Pp.text . T.unpack . toNewick $ t)
                       | (h, t) <- ss]
+              Pp.<> Pp.line
   reportDoc ssDoc
+
+  announce "Is the tree clock like?"
+  if clockLike tree
+    then do
+    report "Tree is clock-like."
+    report $ show (distancesRootExtantLeaves tree)
+    else error "Tree should be clock-like."
