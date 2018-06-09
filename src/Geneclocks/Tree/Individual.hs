@@ -30,7 +30,7 @@ module Geneclocks.Tree.Individual
   , iStateToIName
   , iStateToSName
   , INodeType(..)
-  , coalescentString
+  , coalescenceString
   , ITree
   , iRootNodeIName
   , iRootNodeSName
@@ -50,9 +50,9 @@ newtype IName a = IName {iName :: a} deriving (Eq, Ord, Read, Show, Generic, Enu
 
 -- | State of individual.
 newtype IState a = IState {iState :: (IName a, SName a)} deriving (Eq, Ord, Read, Generic)
-
 instance Show a => Show (IState a) where
-  show (IState (IName i, s)) = wrap 'I' ++ show i ++ show s
+  -- show (IState (IName i, s)) = wrap 'I' ++ show i ++ show s
+  show (IState (IName i, s)) = 'I' : show i ++ show s
 
 -- | A helper function to create 'iState's from Int names.
 iStateFromInts :: Int -> Int -> IState Int
@@ -68,23 +68,23 @@ iStateToSName  = snd . iState
 data INodeType =
   -- | By definition a degree two node. The underlying species merges, and the
   -- 'SName' changes to the one of the ancestor (going backwards).
-  ISCoalescence
+  ISCoalescent
   -- | Individuals coalesce. A coalescence of individuals changes the 'IName'.
   -- This event involves at least two daughter lineages.
-  | ICoalescence
+  | ICoalescent
   | IExtant  -- ^ Extant leaf.
   | IExtinct -- ^ Extinct leaf.
   deriving (Eq, Read, Generic)
 
 -- | Denote coalescent.
-coalescentString :: String
-coalescentString = wrap 'C'
+coalescenceString :: String
+coalescenceString = wrap 'C'
 
 instance Show INodeType where
-  show ISCoalescence = speciationString
-  show ICoalescence  = coalescentString
-  show IExtant       = extantString
-  show IExtinct      = extinctString
+  show ISCoalescent = speciationString
+  show ICoalescent  = coalescenceString
+  show IExtant       = existenceString
+  show IExtinct      = extinctionString
 
 instance NodeType INodeType where
   extant  IExtant = True
@@ -92,7 +92,7 @@ instance NodeType INodeType where
   extinct IExtinct = True
   extinct _        = False
   defaultExternal  = IExtant
-  defaultInternal  = ICoalescence
+  defaultInternal  = ICoalescent
 
 -- | A gene individual tree.
 type ITree a b = PhyloTree (IState a) b INodeType
@@ -110,7 +110,7 @@ iRootNodeSName = iStateToSName . rootNodeState
 --
 -- Performed checks:
 --   - Validity, clock-likeness of both trees.
---   - Height has to be equal.
+--   - Heights have to be equal.
 --   - No coalescence of any pair of individuals later than the coalescence of
 --     the respective species.
 --   - For a speciation:
@@ -127,9 +127,11 @@ iRootNodeSName = iStateToSName . rootNodeState
 -- individuals (backwards in time) has to have the same branch length. This is
 -- not yet checked here. All this gets very complicated...
 --
--- I am still unsure whether this function gives a TRUE for some fancy bullshit
--- 'ITree's that actually do not agree with the 'STree'...
+-- I am still unsure whether this function is fail proof. I.e., it may still
+-- give a TRUE for some fancy bullshit 'ITree' that actually does not agree with
+-- the 'STree'...
 
+-- TODO: Use Writer to give reason why they do not fit.
 iAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => ITree a b -> STree a b -> Bool
 iAgree i s = valid i && clockLike i &&
              valid s && clockLike s &&
@@ -141,21 +143,29 @@ iAgree i s = valid i && clockLike i &&
 iCheckHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Bool
 iCheckHeightsNSplits s = all (iCheckHeightNSplit s)
 
+-- Check the speciation at the root of the tree.
+iSpeciationAgrees :: (Ord a, Eq b) => ITree a b -> STree a b -> Bool
+iSpeciationAgrees i s = rootNodeType i == ISCoalescent &&
+                        rootNodeType s == SCoalescent &&
+                        rootNodesAgreeWith (iStateToSName . state) state i s
+
 -- Nomenclature: (S)pecies, (I)ndividual, (N)ode, (T)ype, (Tr)ree, (D)aughter
 iCheckHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b)
                    => STree a b -> (b, ITree a b) -> Bool
 iCheckHeightNSplit s (h, i)
-  | iNT == ISCoalescence =
+  | iNT == ISCoalescent =
       -- Heights of speciations are equal.
       h  == sH &&
       -- Ancestors and daughter species agree.
-      rootNodesAgree iStateToSName id i sMrcaTr &&
+      iSpeciationAgrees i sMrcaTr &&
       -- Force degree two node.
-      rootDegree i == 2
-  | iNT == ICoalescence  =
-      -- The species cannot change and have to be equal.
+      rootDegree i == 2 &&
+      -- Individual name does not change.
+      iRootNodeIName i `elem` map iRootNodeIName iDs
+  | iNT == ICoalescent  =
+      -- The ancestor and daughter species have to be equal.
       isSingleton (S.insert iS iDSs) &&
-      -- Ancestor and daughter individuals need to be different.
+      -- Ancestor and daughter individuals have to be different.
       isPairwiseDistinct (iRootNodeIName i : iDIs)
   | external iNT        = iS `elem` map state (getLeaves s)
   | otherwise           = error "INodeType did not pattern match. Weird."

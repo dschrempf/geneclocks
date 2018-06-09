@@ -24,16 +24,17 @@ module Geneclocks.Tree.Phylo
   ( module Data.Tree
   , NodeType(..)
   , wrap
-  , extantString
-  , extinctString
+  , existenceString
+  , extinctionString
   , BuilderLabel(..)
   , PhyloLabel(..)
   , PhyloTree
   , rootNodeState
   , rootNodeBrLn
   , rootNodeType
+  , rootNodeStatesOfDaughters
   , rootDegree
-  , rootNodesAgree
+  , rootNodesAgreeWith
   , singleton
   , valid
   , totalBrLn
@@ -101,12 +102,12 @@ wrap :: Char -> String
 wrap c = '[' : c : "]"
 
 -- | Denote extant leaf.
-extantString :: String
-extantString = wrap '.'
+existenceString :: String
+existenceString = wrap '.'
 
 -- | Denote extinct leaf.
-extinctString :: String
-extinctString = wrap 'X'
+extinctionString :: String
+extinctionString = wrap 'X'
 
 -- | Extract node information and branch length information from a phylogenetic tree.
 class BuilderLabel l where
@@ -143,15 +144,15 @@ rootNodeStatesOfDaughters t = map rootNodeState (subForest t)
 rootDegree :: PhyloTree a b c -> Int
 rootDegree t = length (subForest t) + 1
 
--- | For two phylogenetic trees, extract information from the root node and
--- check if it coincides. Useful to test if speciations agree, see 'iCheckHeightNSplit'.
-rootNodesAgree :: (Ord a)
-               => (a1 -> a) -> (a2 -> a) -> PhyloTree a1 b1 c1 -> PhyloTree a2 b2 c2 -> Bool
-rootNodesAgree fs ft s t = sN == tN && S.null (S.difference sDNs tDNs)
-  where sN = fs $ rootNodeState s
-        sDNs = S.fromList $ map fs $ rootNodeStatesOfDaughters s
-        tN = ft $ rootNodeState t
-        tDNs = S.fromList $ map ft $ rootNodeStatesOfDaughters t
+-- | Check if ancestor and daughters of first tree are a subset of the ancestor
+-- and daughters of the second tree. Useful to test if, e.g., speciations agree,
+-- see 'iCheckHeightNSplit'.
+rootNodesAgreeWith :: (Ord a, Ord c) => (a -> c) -> (b -> c) -> Tree a -> Tree b -> Bool
+rootNodesAgreeWith f g s t =
+  f (rootLabel s) == g (rootLabel t) &&
+  S.fromList sDs `S.isSubsetOf` S.fromList tDs
+  where sDs = map (f . rootLabel) (subForest s)
+        tDs = map (g . rootLabel) (subForest t)
 
 -- | The simplest tree. Usually an extant leaf with an attached branch.
 singleton :: (NodeType c) => a -> b -> PhyloTree a b c

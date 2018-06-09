@@ -32,12 +32,13 @@ import           GHC.Generics          (Generic)
 newtype SName a = SName {sName :: a} deriving (Eq, Ord, Read, Generic, Enum, Num, Real, Integral)
 
 instance Show a => Show (SName a) where
-  show (SName s) = "[S]" ++ show s
+  -- show (SName s) = wrap 'S' ++ show s
+  show (SName s) = 'S' : show s
 
 -- | Node type of a phylogenetic tree. Technically, the type 'Internal' is not
 -- necessary because it can be deduced from the tree. However, it is convenient
 -- to save the type in this way.
-data SNodeType = SCoalescence         -- ^ Internal node.
+data SNodeType = SCoalescent         -- ^ Internal node.
                | SExtant              -- ^ Extant leaf.
                | SExtinct             -- ^ Extinct leaf.
                deriving (Eq, Read, Generic)
@@ -47,19 +48,19 @@ instance NodeType SNodeType where
   extant   _            = False
   extinct  SExtinct     = True
   extinct  _            = False
-  internal SCoalescence = True
+  internal SCoalescent = True
   internal _            = False
   defaultExternal       = SExtant
-  defaultInternal       = SCoalescence
+  defaultInternal       = SCoalescent
 
 -- | Denote speciation.
 speciationString :: String
 speciationString = wrap 'S'
 
 instance Show SNodeType where
-  show SCoalescence = speciationString
-  show SExtant      = extantString
-  show SExtinct     = extinctString
+  show SCoalescent = speciationString
+  show SExtant      = existenceString
+  show SExtinct     = extinctionString
 
 -- | A species tree is a tree with 'SName's as node states, and 'SNodeType's as
 -- node types. The node state is called name. This may be subject to change.

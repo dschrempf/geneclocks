@@ -1,5 +1,5 @@
 -- {-# LANGUAGE DeriveAnyClass #-}
-{-# LANGUAGE DeriveGeneric  #-}
+{-# LANGUAGE DeriveGeneric #-}
 -- {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 
 {- |
@@ -46,6 +46,7 @@ Ideas:
 module Geneclocks.Tree.Gene
   ( GName(..)
   , GState(..)
+  , gStateFromInts
   , gStateToGName
   , gStateToIState
   , gStateToIName
@@ -60,6 +61,7 @@ module Geneclocks.Tree.Gene
   , gAgree
   ) where
 
+import           Data.Maybe
 import qualified Data.Set                   as S
 import           Geneclocks.Tools
 import           Geneclocks.Tree.Individual
@@ -72,6 +74,13 @@ newtype GName a = GName {gName :: a} deriving (Eq, Ord)
 
 -- | A gene has a name and belongs to an individual.
 newtype GState a = GState {gState :: (GName a, IState a)} deriving (Eq, Ord)
+
+instance Show a => Show (GState a) where
+  -- show (GState (GName g, i)) = wrap 'G' ++ show g ++ show i
+  show (GState (GName g, i)) = 'G' : show g ++ show i
+
+gStateFromInts :: Int -> Int -> Int -> GState Int
+gStateFromInts g i s = GState (GName g, iStateFromInts i s)
 
 -- | Extract gene name.
 gStateToGName :: GState a -> GName a
@@ -93,18 +102,15 @@ gStateToSName (GState (_, IState s)) = snd s
 data GNodeType a =
   -- | Degree two node. The underlying species merges, and 'SName' changes to
   -- the one of the ancestor (if going backwards).
-  GSCoalescence
-  -- | Individuals coalesce. A coalescence of individuals changes the 'IName'.
-  -- This event involves at least two daughter lineages.
-  | GICoalescence
-  -- I removed this special degree two coalescence. Let's see if it also works
-  -- without it. We can get the information from the underlying individual tree.
+  GSCoalescent
+  -- | Individuals coalesce. A coalescence of individuals changes the 'IName'
+  -- and the 'GName'.
+  | GICoalescent
+  -- -- REMOVED FOR NOW.
   -- -- | Degree two node; a coalescent event of individuals without an observed
-  -- -- partner gene lineage, because it was lost somewhere on the tree. The
-  -- -- problem is, that we need to record the individual that this coalescent
-  -- -- event happened with. TODO: Proper, unambiguous handling of daughter
-  -- -- individual states. Changes 'IName'.
-  -- | GICoalescenceLoss (IState a)
+  -- -- partner gene lineage, because it was lost somewhere on the tree. Changes
+  -- -- 'IName'.
+  -- -- | GICoalescenceLoss
   -- | The daughters arise due to a duplication. A duplication changes the
   -- 'GName', but leaves 'SName' and 'IName' unchanged.
   | GDuplication
@@ -117,18 +123,17 @@ duplicationString :: String
 duplicationString = wrap 'D'
 
 instance Show (GNodeType a) where
-  show GSCoalescence         = speciationString
-  show GICoalescence         = coalescentString
-  -- show (GICoalescenceLoss _) = coalescentString
-  show GDuplication          = duplicationString
-  show GLoss                 = extinctString
-  show GExtant               = extantString
+  show GSCoalescent     = speciationString
+  show GICoalescent     = coalescenceString
+  show GDuplication      = duplicationString
+  show GLoss             = extinctionString
+  show GExtant           = existenceString
 
 instance (Eq a) => NodeType (GNodeType a) where
-  extant GExtant  = True
-  extant _        = False
-  extinct GLoss   = True
-  extinct _       = False
+  extant GExtant = True
+  extant _       = False
+  extinct GLoss = True
+  extinct _     = False
   defaultExternal = GExtant
   defaultInternal = GDuplication
 
@@ -151,52 +156,67 @@ gRootNodeIName = gStateToIName . rootNodeState
 gRootNodeSName :: GTree a b -> SName a
 gRootNodeSName = gStateToSName . rootNodeState
 
--- | Check if a gene individual tree is valid.
+-- | Check if a gene tree agrees with given individual and species trees.
 --
 -- Performed checks:
--- TODO
---
---   - Validity of gene individual tree.
---
---   - Validity of species tree.
---
---   - No coalescence of any pair of genes before the respective species
---     coalesce.
---
---   - (Number of coalescent events) == (Number of genes - 1).
---
---   - Each gene has to coalesce at least once. THIS IS WRONG. Only, if I
---     introduce degree two nodes in all lineages at the time slice of each
---     coalescence.
+--   - Validity and clock-likeness of gene tree.
+--   - Heights have to be equal.
+--   - Agreement of individual and species tree.
+--   - Lots of other stuff (see code).
 gAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => GTree a b -> ITree a b -> STree a b -> Bool
 gAgree g i s = valid g && clockLike g &&
-               heightClockLike i == heightClockLike s &&
+               heightClockLike g == heightClockLike i &&
                iAgree i s &&
                gRootNodeIState g == rootNodeState i &&
                gCheckHeightsNSplits i (heightsNSplits g)
 
 -- Check if the individual tree agrees with the [(Height, Split)] list.
-gCheckHeightsNSplits :: (Ord a, Ord b, Num b) => ITree a b -> [(b, GTree a b)] -> Bool
+gCheckHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> [(b, GTree a b)] -> Bool
 gCheckHeightsNSplits i = all (gCheckHeightNSplit i)
 
-gCheckHeightNSplit :: (Ord a, Ord b, Num b) => ITree a b -> (b, GTree a b) -> Bool
+-- Check the coalescence at the root of the tree.
+gSpeciationAgrees :: (Ord a, Eq b) => GTree a b -> ITree a b -> Bool
+gSpeciationAgrees g i = rootNodeType g == GSCoalescent &&
+                        rootNodeType i == ISCoalescent &&
+                        rootNodesAgreeWith (gStateToIState . state) state g i
+
+-- Check the coalescence at the root of the tree.
+gCoalescenceAgrees :: (Ord a, Eq b) => GTree a b -> ITree a b -> Bool
+gCoalescenceAgrees g i = rootNodeType g == GICoalescent &&
+                         rootNodeType i == ICoalescent &&
+                         rootNodesAgreeWith (gStateToIState . state) state g i
+
+gCheckHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> (b, GTree a b) -> Bool
 gCheckHeightNSplit i (h, g)
-  -- Basically, we need to go through all different node types.
-  | gNT == GSCoalescence  = mrcaHeight daughterIndividuals i == Just h &&
-                          nDaughters == 1 &&
-                          S.elemAt 0 daughterIndividuals /= gs
-  | gNT == GICoalescence  = isSingleton daughterIndividuals &&
-                          isPairwiseDistinct daughterGeneL &&
-                          gi `S.notMember` daughterIndividuals
-  | gNT == GDuplication  = isSingleton daughterIndividuals && isSingleton daughterGenes
-  | external gNT         = gI `elem` map state (getLeaves i)
-  | otherwise           = error "GINodeType did not pattern match. Weird."
-  -- TODO: Check that coalescent events happen at the same time.
+  | gNT == GSCoalescent  =
+      -- Heights match.
+      h == iH &&
+      -- Speciation agrees.
+      gSpeciationAgrees g iMrcaTr &&
+      -- Force degree two node.
+      rootDegree g == 2 &&
+      -- Gene name does not change.
+      gRootNodeGName g `elem` map gRootNodeGName gDs
+  | gNT == GICoalescent  =
+      -- Heights match.
+      h == iH &&
+      -- Coalescece agrees.
+      gCoalescenceAgrees g iMrcaTr &&
+      -- Gene names have to change.
+      isPairwiseDistinct (gRootNodeGName g : gDGs)
+  | gNT == GDuplication   =
+      -- Ancestor and daughter individuals states have to be equal.
+      isSingleton (S.insert gI gDIs) &&
+      -- Ancestor and daughter genes have to be different.
+      isPairwiseDistinct (gRootNodeGName g : gDGs)
+  | external gNT          = gI `elem` map state (getLeaves i)
+  | otherwise             = error "GINodeType did not pattern match. Weird."
   where
     gI = gRootNodeIState g
     gNT = rootNodeType g
-    gDaughters = subForest g
-    nDaughters = length gDaughters
-    daughterIndividuals = S.fromList $ map (gStateToSName . rootNodeState) gDaughters
-    daughterGeneL = map (gStateToGName . rootNodeState) gDaughters
-    daughterGenes = S.fromList daughterGeneL
+    gDs = subForest g
+    gDIs = S.fromList $ map gRootNodeIState gDs
+    gDGs = map gRootNodeGName gDs
+    (iH, iMrcaTr) = fromMaybe
+                    (error $ "MRCA of " ++ show gDIs ++ " not present in individual tree " ++ show i)
+                    (mrcaHeightNTree (S.singleton gI) i)
