@@ -46,10 +46,10 @@ import           Geneclocks.Tree.Species
 import           GHC.Generics            (Generic)
 
 -- | Individual name.
-newtype IName a = IName a deriving (Eq, Ord, Read, Show, Generic, Enum, Num, Real, Integral)
+newtype IName a = IName {iName :: a} deriving (Eq, Ord, Read, Show, Generic, Enum, Num, Real, Integral)
 
 -- | State of individual.
-newtype IState a = IState (IName a, SName a) deriving (Eq, Ord, Read, Generic)
+newtype IState a = IState {iState :: (IName a, SName a)} deriving (Eq, Ord, Read, Generic)
 
 instance Show a => Show (IState a) where
   show (IState (IName i, s)) = wrap 'I' ++ show i ++ show s
@@ -59,10 +59,10 @@ iStateFromInts :: Int -> Int -> IState Int
 iStateFromInts i s = IState (IName i, SName s)
 
 iStateToIName :: IState a -> IName a
-iStateToIName (IState (n, _)) = n
+iStateToIName = fst . iState
 
 iStateToSName :: IState a -> SName a
-iStateToSName (IState (_, n)) = n
+iStateToSName  = snd . iState
 
 -- | Node types for individuals (on species).
 data INodeType =
@@ -133,12 +133,11 @@ iRootNodeSName = iStateToSName . rootNodeState
 iAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => ITree a b -> STree a b -> Bool
 iAgree i s = valid i && clockLike i &&
              valid s && clockLike s &&
-             -- TODO.
              heightClockLike i == heightClockLike s &&
              iRootNodeSName i == rootNodeState s &&
              iCheckHeightsNSplits s (heightsNSplits i)
 
--- | Check if the species tree agrees with the [(Height, Split)] list.
+-- Check if the species tree agrees with the [(Height, Split)] list.
 iCheckHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Bool
 iCheckHeightsNSplits s = all (iCheckHeightNSplit s)
 

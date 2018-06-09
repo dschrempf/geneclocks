@@ -37,18 +37,24 @@ Questions:
     (i.e., free recombination, and some other assumptions)?
 
 TODO: What can be done to avoid re-computation of heights, leaf sets, and so on?
+
+Ideas:
+- Topology data type.
+- Data tree data type (only branch lengths and node states).
 -}
 
 module Geneclocks.Tree.Gene
   ( GName(..)
   , GState(..)
   , gStateToGName
+  , gStateToIState
   , gStateToIName
   , gStateToSName
   , GNodeType(..)
   , duplicationString
   , GTree
   , gRootNodeGName
+  , gRootNodeIState
   , gRootNodeIName
   , gRootNodeSName
   , gAgree
@@ -62,22 +68,26 @@ import           Geneclocks.Tree.Species
 import           GHC.Generics               (Generic)
 
 -- | Gene name.
-newtype GName a = GName a deriving (Eq, Ord)
+newtype GName a = GName {gName :: a} deriving (Eq, Ord)
 
 -- | A gene has a name and belongs to an individual.
-newtype GState a = GState (GName a, IState a) deriving (Eq, Ord)
+newtype GState a = GState {gState :: (GName a, IState a)} deriving (Eq, Ord)
 
 -- | Extract gene name.
 gStateToGName :: GState a -> GName a
-gStateToGName (GState (n, _)) = n
+gStateToGName = fst . gState
+
+-- | Extract individual state.
+gStateToIState :: GState a -> IState a
+gStateToIState = snd . gState
 
 -- | Extract individual name.
 gStateToIName :: GState a -> IName a
-gStateToIName (GState (_, IState iS)) = fst iS
+gStateToIName (GState (_, IState s)) = fst s
 
 -- | Extranct species name.
 gStateToSName :: GState a -> SName a
-gStateToSName (GState (_, IState iState)) = snd iState
+gStateToSName (GState (_, IState s)) = snd s
 
 -- | Node types for genes (on individuals (on species)).
 data GNodeType a =
@@ -87,16 +97,18 @@ data GNodeType a =
   -- | Individuals coalesce. A coalescence of individuals changes the 'IName'.
   -- This event involves at least two daughter lineages.
   | GICoalescence
-  -- | Degree two node; a coalescent event of individuals without an observed
-  -- partner gene lineage, because it was lost somewhere on the tree. The
-  -- problem is, that we need to record the individual that this coalescent
-  -- event happened with. TODO: Proper, unambiguous handling of daughter
-  -- individual states. Changes 'IName'.
-  | GICoalescenceLoss (IState a)
+  -- I removed this special degree two coalescence. Let's see if it also works
+  -- without it. We can get the information from the underlying individual tree.
+  -- -- | Degree two node; a coalescent event of individuals without an observed
+  -- -- partner gene lineage, because it was lost somewhere on the tree. The
+  -- -- problem is, that we need to record the individual that this coalescent
+  -- -- event happened with. TODO: Proper, unambiguous handling of daughter
+  -- -- individual states. Changes 'IName'.
+  -- | GICoalescenceLoss (IState a)
   -- | The daughters arise due to a duplication. A duplication changes the
   -- 'GName', but leaves 'SName' and 'IName' unchanged.
   | GDuplication
-  | GExtinct -- ^ Extinct leaf (probably not necessary, but why not).
+  | GLoss    -- ^ Extinct leaf (probably not necessary, but why not).
   | GExtant  -- ^ Extant leaf.
   deriving (Eq, Read, Generic)
 
@@ -107,18 +119,18 @@ duplicationString = wrap 'D'
 instance Show (GNodeType a) where
   show GSCoalescence         = speciationString
   show GICoalescence         = coalescentString
-  show (GICoalescenceLoss _) = coalescentString
+  -- show (GICoalescenceLoss _) = coalescentString
   show GDuplication          = duplicationString
-  show GExtinct              = extinctString
+  show GLoss                 = extinctString
   show GExtant               = extantString
 
 instance (Eq a) => NodeType (GNodeType a) where
-  extant GExtant = True
-  extant _       = False
-  extinct GExtinct = True
-  extinct _        = False
-  defaultExternal  = GExtant
-  defaultInternal  = GDuplication
+  extant GExtant  = True
+  extant _        = False
+  extinct GLoss   = True
+  extinct _       = False
+  defaultExternal = GExtant
+  defaultInternal = GDuplication
 
 -- | A gene individual tree.
 type GTree a b = PhyloTree (GState a) b (GNodeType a)
@@ -126,6 +138,10 @@ type GTree a b = PhyloTree (GState a) b (GNodeType a)
 -- | Extract name of gene of root node.
 gRootNodeGName :: GTree a b -> GName a
 gRootNodeGName = gStateToGName . rootNodeState
+
+-- | Extract state of individual of root node.
+gRootNodeIState :: GTree a b -> IState a
+gRootNodeIState =  gStateToIState . rootNodeState
 
 -- | Extract name of individual of root node.
 gRootNodeIName :: GTree a b -> IName a
@@ -138,6 +154,7 @@ gRootNodeSName = gStateToSName . rootNodeState
 -- | Check if a gene individual tree is valid.
 --
 -- Performed checks:
+-- TODO
 --
 --   - Validity of gene individual tree.
 --
@@ -151,43 +168,35 @@ gRootNodeSName = gStateToSName . rootNodeState
 --   - Each gene has to coalesce at least once. THIS IS WRONG. Only, if I
 --     introduce degree two nodes in all lineages at the time slice of each
 --     coalescence.
--- TODO.
 gAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => GTree a b -> ITree a b -> STree a b -> Bool
-gAgree g i s = valid g && iAgree i s && gCheckHeightsNSplits s (heightsNSplits g)
+gAgree g i s = valid g && clockLike g &&
+               heightClockLike i == heightClockLike s &&
+               iAgree i s &&
+               gRootNodeIState g == rootNodeState i &&
+               gCheckHeightsNSplits i (heightsNSplits g)
 
--- sCoalescencesAgree :: GITree a b -> STree a b -> Bool
--- sCoalescencesAgree g s = undefined
---   where hs = heightsNSplits g
+-- Check if the individual tree agrees with the [(Height, Split)] list.
+gCheckHeightsNSplits :: (Ord a, Ord b, Num b) => ITree a b -> [(b, GTree a b)] -> Bool
+gCheckHeightsNSplits i = all (gCheckHeightNSplit i)
 
--- | Check if the species tree agrees with the [(Height, Split)] list.
-gCheckHeightsNSplits :: (Ord a, Ord b, Num b) => STree a b -> [(b, GTree a b)] -> Bool
-gCheckHeightsNSplits s = all (gCheckHeightNSplit s)
-
--- TODO TODO TODO.
-gCheckHeightNSplit :: (Ord a, Ord b, Num b) => STree a b -> (b, GTree a b) -> Bool
-gCheckHeightNSplit s (h, g)
+gCheckHeightNSplit :: (Ord a, Ord b, Num b) => ITree a b -> (b, GTree a b) -> Bool
+gCheckHeightNSplit i (h, g)
   -- Basically, we need to go through all different node types.
-  | gt == GSCoalescence  = mrcaHeight daughterSpecies s == Just h &&
+  | gNT == GSCoalescence  = mrcaHeight daughterIndividuals i == Just h &&
                           nDaughters == 1 &&
-                          S.elemAt 0 daughterSpecies /= gs
-  | gt == GICoalescence  = isSingleton daughterSpecies &&
-                          isPairwiseDistinct daughterIndividualL &&
+                          S.elemAt 0 daughterIndividuals /= gs
+  | gNT == GICoalescence  = isSingleton daughterIndividuals &&
+                          isPairwiseDistinct daughterGeneL &&
                           gi `S.notMember` daughterIndividuals
-  | GICoalescenceLoss (IState (_, sL)) <- gt  = isSingleton (S.insert sL daughterSpecies) &&
-                                               nDaughters == 1
-  | gt == GDuplication  = isSingleton daughterIndividuals && isSingleton daughterSpecies
-  | external gt         = True
-  | otherwise           = error "GINodeType did not patter match. Weird."
+  | gNT == GDuplication  = isSingleton daughterIndividuals && isSingleton daughterGenes
+  | external gNT         = gI `elem` map state (getLeaves i)
+  | otherwise           = error "GINodeType did not pattern match. Weird."
   -- TODO: Check that coalescent events happen at the same time.
   where
-    gs = gRootNodeSName g
-    gi = gRootNodeIName g
-    gt = rootNodeType g
+    gI = gRootNodeIState g
+    gNT = rootNodeType g
     gDaughters = subForest g
     nDaughters = length gDaughters
-    daughterSpecies = S.fromList $ map (gStateToSName . rootNodeState) gDaughters
-    daughterIndividualL = map (gStateToIName . rootNodeState) gDaughters
-    daughterIndividuals = S.fromList daughterIndividualL
-
--- TODO: Test this!
-
+    daughterIndividuals = S.fromList $ map (gStateToSName . rootNodeState) gDaughters
+    daughterGeneL = map (gStateToGName . rootNodeState) gDaughters
+    daughterGenes = S.fromList daughterGeneL

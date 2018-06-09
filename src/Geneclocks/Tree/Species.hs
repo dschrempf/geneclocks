@@ -29,7 +29,7 @@ import           Geneclocks.Tree.Phylo
 import           GHC.Generics          (Generic)
 
 -- | Species name.
-newtype SName a = SName a deriving (Eq, Ord, Read, Generic, Enum, Num, Real, Integral)
+newtype SName a = SName {sName :: a} deriving (Eq, Ord, Read, Generic, Enum, Num, Real, Integral)
 
 instance Show a => Show (SName a) where
   show (SName s) = "[S]" ++ show s
