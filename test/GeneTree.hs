@@ -51,13 +51,13 @@ performTests = do
   reportText $ toNewick speciesTree
   report "Individual tree."
   reportText $ toNewick individualTree
-  if iAgree individualTree speciesTree
-    then report "Individual and species trees do agree."
-    else error "Individual and species tree should agree."
+  either error
+    (\_ -> report "Individual and species trees do agree.")
+    (assertISAgreement individualTree speciesTree)
 
   announce "Agreement of gene tree with individual and species trees."
   report "Gene tree."
   reportText $ toNewick geneTree
-  if gAgree geneTree individualTree speciesTree
-    then report "Gene, individual and species trees do agree."
-    else error "Gene, individual and species tree should agree."
+  either error
+    (\_ -> report "Gene, individual and species trees do agree")
+    (assertGISAgreement geneTree individualTree speciesTree)

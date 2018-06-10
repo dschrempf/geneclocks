@@ -39,6 +39,7 @@ dependencies:
 - math-functions
 - transformers
 - monad-logger
+- errors
 
 library:
   source-dirs: src

@@ -58,10 +58,11 @@ module Geneclocks.Tree.Gene
   , gRootNodeIState
   , gRootNodeIName
   , gRootNodeSName
-  , gAgree
+  , assertGISAgreement
   ) where
 
-import           Data.Maybe
+import           Control.Error
+import           Data.Foldable
 import qualified Data.Set                   as S
 import           Geneclocks.Tools
 import           Geneclocks.Tree.Individual
@@ -123,11 +124,11 @@ duplicationString :: String
 duplicationString = wrap 'D'
 
 instance Show (GNodeType a) where
-  show GSCoalescent     = speciationString
-  show GICoalescent     = coalescenceString
-  show GDuplication      = duplicationString
-  show GLoss             = extinctionString
-  show GExtant           = existenceString
+  show GSCoalescent = speciationString
+  show GICoalescent = coalescenceString
+  show GDuplication = duplicationString
+  show GLoss        = extinctionString
+  show GExtant      = existenceString
 
 instance (Eq a) => NodeType (GNodeType a) where
   extant GExtant = True
@@ -156,23 +157,25 @@ gRootNodeIName = gStateToIName . rootNodeState
 gRootNodeSName :: GTree a b -> SName a
 gRootNodeSName = gStateToSName . rootNodeState
 
--- | Check if a gene tree agrees with given individual and species trees.
+-- | Assert if a gene tree agrees with given individual and species trees.
 --
 -- Performed checks:
 --   - Validity and clock-likeness of gene tree.
 --   - Heights have to be equal.
 --   - Agreement of individual and species tree.
 --   - Lots of other stuff (see code).
-gAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => GTree a b -> ITree a b -> STree a b -> Bool
-gAgree g i s = valid g && clockLike g &&
-               heightClockLike g == heightClockLike i &&
-               iAgree i s &&
-               gRootNodeIState g == rootNodeState i &&
-               gCheckHeightsNSplits i (heightsNSplits g)
+assertGISAgreement :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => GTree a b -> ITree a b -> STree a b -> Either String ()
+assertGISAgreement g i s =
+  assertErr "Gene tree not valid" (valid g) >>
+  assertErr "Gene tree not clock-like." (clockLike g) >>
+  assertErr "Heights of gene and individual trees are not equal." (heightClockLike g == heightClockLike i) >>
+  assertISAgreement i s >>
+  assertErr "The root node states of the gene and individual tree do not match." (gRootNodeIState g == rootNodeState i) >>
+  assertGHeightsNSplits i (heightsNSplits g)
 
 -- Check if the individual tree agrees with the [(Height, Split)] list.
-gCheckHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> [(b, GTree a b)] -> Bool
-gCheckHeightsNSplits i = all (gCheckHeightNSplit i)
+assertGHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> [(b, GTree a b)] -> Either String ()
+assertGHeightsNSplits i = traverse_ (assertGHeightNSplit i)
 
 -- Check the coalescence at the root of the tree.
 gSpeciationAgrees :: (Ord a, Eq b) => GTree a b -> ITree a b -> Bool
@@ -186,30 +189,34 @@ gCoalescenceAgrees g i = rootNodeType g == GICoalescent &&
                          rootNodeType i == ICoalescent &&
                          rootNodesAgreeWith (gStateToIState . state) state g i
 
-gCheckHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> (b, GTree a b) -> Bool
-gCheckHeightNSplit i (h, g)
+-- I decided to use Either instead of a simple boolean return value because then
+-- I can inform the user about why the check failed.
+assertGHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> (b, GTree a b) -> Either String ()
+assertGHeightNSplit i (h, g)
+  -- TODO: Extinct nodes have to be shorter than extant ones.
   | gNT == GSCoalescent  =
       -- Heights match.
-      h == iH &&
+      -- TODO: Ahhhhhhhhhhhhhhhhhhhhhh.
+      assertErr ("Heights of a speciation do not match between gene and individual tree.") (h == iH) >>
       -- Speciation agrees.
-      gSpeciationAgrees g iMrcaTr &&
+      assertErr "A speciations does not agree between gene and individual tree." (gSpeciationAgrees g iMrcaTr) >>
       -- Force degree two node.
-      rootDegree g == 2 &&
+      assertErr "The degree of a speciation node is not two." (rootDegree g == 2) >>
       -- Gene name does not change.
-      gRootNodeGName g `elem` map gRootNodeGName gDs
+      assertErr "The gene name changes at a speciation event." (gRootNodeGName g `elem` map gRootNodeGName gDs)
   | gNT == GICoalescent  =
       -- Heights match.
-      h == iH &&
+      assertErr "Heights of coalescence do not match between gene and individual tree." (h == iH) >>
       -- Coalescece agrees.
-      gCoalescenceAgrees g iMrcaTr &&
+      assertErr "A coalescence does not agree between gene and individual tree." (gCoalescenceAgrees g iMrcaTr) >>
       -- Gene names have to change.
-      isPairwiseDistinct (gRootNodeGName g : gDGs)
+      assertErr "Gene names do not change at a coalescence." (isPairwiseDistinct (gRootNodeGName g : gDGs))
   | gNT == GDuplication   =
       -- Ancestor and daughter individuals states have to be equal.
-      isSingleton (S.insert gI gDIs) &&
+      assertErr "Ancestor and daughter individual states have to be equal at a duplication." (isSingleton (S.insert gI gDIs)) >>
       -- Ancestor and daughter genes have to be different.
-      isPairwiseDistinct (gRootNodeGName g : gDGs)
-  | external gNT          = gI `elem` map state (getLeaves i)
+      assertErr "Ancestor and daughter genes have to be different at a duplication." (isPairwiseDistinct (gRootNodeGName g : gDGs))
+  | external gNT          = assertErr "An extant individual is present in the gene but not the individual tree." (gI `elem` map state (getLeaves i))
   | otherwise             = error "GINodeType did not pattern match. Weird."
   where
     gI = gRootNodeIState g

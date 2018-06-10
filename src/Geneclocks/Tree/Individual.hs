@@ -34,11 +34,12 @@ module Geneclocks.Tree.Individual
   , ITree
   , iRootNodeIName
   , iRootNodeSName
-  , iAgree
+  , assertISAgreement
   ) where
 
 -- import           Control.DeepSeq
-import           Data.Maybe
+import           Control.Error
+import           Data.Foldable
 import qualified Data.Set                as S
 import           Geneclocks.Tools
 import           Geneclocks.Tree.Phylo
@@ -83,8 +84,8 @@ coalescenceString = wrap 'C'
 instance Show INodeType where
   show ISCoalescent = speciationString
   show ICoalescent  = coalescenceString
-  show IExtant       = existenceString
-  show IExtinct      = extinctionString
+  show IExtant      = existenceString
+  show IExtinct     = extinctionString
 
 instance NodeType INodeType where
   extant  IExtant = True
@@ -131,17 +132,19 @@ iRootNodeSName = iStateToSName . rootNodeState
 -- give a TRUE for some fancy bullshit 'ITree' that actually does not agree with
 -- the 'STree'...
 
--- TODO: Use Writer to give reason why they do not fit.
-iAgree :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => ITree a b -> STree a b -> Bool
-iAgree i s = valid i && clockLike i &&
-             valid s && clockLike s &&
-             heightClockLike i == heightClockLike s &&
-             iRootNodeSName i == rootNodeState s &&
-             iCheckHeightsNSplits s (heightsNSplits i)
+assertISAgreement :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => ITree a b -> STree a b -> Either String ()
+assertISAgreement i s =
+  assertErr "Individual tree is not valid." (valid i) >>
+  assertErr "Individual tree is not clock-like." (clockLike i) >>
+  assertErr "Species tree is not valid." (valid s) >>
+  assertErr "Species tree is not clock-like." (clockLike s) >>
+  assertErr "Heights of individual and species tree are not equal." (heightClockLike i == heightClockLike s) >>
+  assertErr "Individual and species root node states do not match." (iRootNodeSName i == rootNodeState s) >>
+  assertIHeightsNSplits s (heightsNSplits i)
 
 -- Check if the species tree agrees with the [(Height, Split)] list.
-iCheckHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Bool
-iCheckHeightsNSplits s = all (iCheckHeightNSplit s)
+assertIHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Either String ()
+assertIHeightsNSplits s = traverse_ (assertIHeightNSplit s)
 
 -- Check the speciation at the root of the tree.
 iSpeciationAgrees :: (Ord a, Eq b) => ITree a b -> STree a b -> Bool
@@ -150,24 +153,25 @@ iSpeciationAgrees i s = rootNodeType i == ISCoalescent &&
                         rootNodesAgreeWith (iStateToSName . state) state i s
 
 -- Nomenclature: (S)pecies, (I)ndividual, (N)ode, (T)ype, (Tr)ree, (D)aughter
-iCheckHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b)
-                   => STree a b -> (b, ITree a b) -> Bool
-iCheckHeightNSplit s (h, i)
+assertIHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b)
+                   => STree a b -> (b, ITree a b) -> Either String ()
+assertIHeightNSplit s (h, i)
+  -- TODO: Extinct nodes have to be shorter than extant ones.
   | iNT == ISCoalescent =
       -- Heights of speciations are equal.
-      h  == sH &&
+      assertErr "Heights of a speciation do not match between individual and species tree." (h  == sH) >>
       -- Ancestors and daughter species agree.
-      iSpeciationAgrees i sMrcaTr &&
+      assertErr "A speciation does not agree between individual and species tree " (iSpeciationAgrees i sMrcaTr) >>
       -- Force degree two node.
-      rootDegree i == 2 &&
+      assertErr "The degree of a speciation node of the individual tree is not two." (rootDegree i == 2) >>
       -- Individual name does not change.
-      iRootNodeIName i `elem` map iRootNodeIName iDs
+      assertErr "The individual name changes at a speciation event." (iRootNodeIName i `elem` map iRootNodeIName iDs)
   | iNT == ICoalescent  =
       -- The ancestor and daughter species have to be equal.
-      isSingleton (S.insert iS iDSs) &&
+      assertErr "Ancestor and daughter species have to be equal at a coalescence." (isSingleton (S.insert iS iDSs)) >>
       -- Ancestor and daughter individuals have to be different.
-      isPairwiseDistinct (iRootNodeIName i : iDIs)
-  | external iNT        = iS `elem` map state (getLeaves s)
+      assertErr "Ancestor and daughter individuals have to be different at a coalescence." (isPairwiseDistinct (iRootNodeIName i : iDIs))
+  | external iNT        = assertErr "An extant species is present in the individual but not the species tree." (iS `elem` map state (getLeaves s))
   | otherwise           = error "INodeType did not pattern match. Weird."
   where
     iS            = iRootNodeSName i
