@@ -164,7 +164,8 @@ gRootNodeSName = gStateToSName . rootNodeState
 --   - Heights have to be equal.
 --   - Agreement of individual and species tree.
 --   - Lots of other stuff (see code).
-assertGISAgreement :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => GTree a b -> ITree a b -> STree a b -> Either String ()
+assertGISAgreement :: (Show a, Eq a, Ord a, ApproxEq b, Show b, Ord b, Num b)
+                   => GTree a b -> ITree a b -> STree a b -> Either String ()
 assertGISAgreement g i s =
   assertErr "Gene tree not valid" (valid g) >>
   assertErr "Gene tree not clock-like." (clockLike g) >>
@@ -174,7 +175,8 @@ assertGISAgreement g i s =
   assertGHeightsNSplits i (heightsNSplits g)
 
 -- Check if the individual tree agrees with the [(Height, Split)] list.
-assertGHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> [(b, GTree a b)] -> Either String ()
+assertGHeightsNSplits :: (Show a, Ord a, ApproxEq b, Show b, Ord b, Num b)
+                      => ITree a b -> [(b, GTree a b)] -> Either String ()
 assertGHeightsNSplits i = traverse_ (assertGHeightNSplit i)
 
 -- Check the coalescence at the root of the tree.
@@ -191,13 +193,13 @@ gCoalescenceAgrees g i = rootNodeType g == GICoalescent &&
 
 -- I decided to use Either instead of a simple boolean return value because then
 -- I can inform the user about why the check failed.
-assertGHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b) => ITree a b -> (b, GTree a b) -> Either String ()
+assertGHeightNSplit :: (Show a, Ord a, ApproxEq b, Show b, Ord b, Num b)
+                    => ITree a b -> (b, GTree a b) -> Either String ()
 assertGHeightNSplit i (h, g)
   -- TODO: Extinct nodes have to be shorter than extant ones.
   | gNT == GSCoalescent  =
       -- Heights match.
-      -- TODO: Ahhhhhhhhhhhhhhhhhhhhhh.
-      assertErr ("Heights of a speciation do not match between gene and individual tree.") (h == iH) >>
+      assertErr "Heights of a speciation do not match between gene and individual tree." (h =~= iH) >>
       -- Speciation agrees.
       assertErr "A speciations does not agree between gene and individual tree." (gSpeciationAgrees g iMrcaTr) >>
       -- Force degree two node.

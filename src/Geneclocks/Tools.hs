@@ -30,8 +30,8 @@ module Geneclocks.Tools
   , isSingleton
   , isPairwiseDistinct
   , defPrecision
-  )
-  where
+  , ApproxEq(..)
+  ) where
 
 import           Data.Function
 import           Data.List
@@ -102,3 +102,19 @@ isSingleton = (== 1) . S.size
 -- | Check if elements of a list are pairwise distinct.
 isPairwiseDistinct :: Ord a => [a] -> Bool
 isPairwiseDistinct l = S.size (S.fromList l) == length l
+
+-- | Data types that support approximate equality checking
+class (Eq a) => ApproxEq a where
+  (=~=) :: a -> a -> Bool
+  (=~=) = (==)
+
+-- | Nothing to do for 'Int's.
+instance ApproxEq Int
+
+-- | How exact should doubles be checked for equality?
+eps :: Double
+eps = 10e-14
+
+-- | Check for approximate equality between two doubles, using 'eps' as margin.
+instance ApproxEq Double where
+  (=~=) x y = abs (x-y) <= eps

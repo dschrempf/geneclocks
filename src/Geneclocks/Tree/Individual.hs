@@ -32,6 +32,7 @@ module Geneclocks.Tree.Individual
   , INodeType(..)
   , coalescenceString
   , ITree
+
   , iRootNodeIName
   , iRootNodeSName
   , assertISAgreement
@@ -132,7 +133,7 @@ iRootNodeSName = iStateToSName . rootNodeState
 -- give a TRUE for some fancy bullshit 'ITree' that actually does not agree with
 -- the 'STree'...
 
-assertISAgreement :: (Show a, Eq a, Ord a, Show b, Ord b, Num b) => ITree a b -> STree a b -> Either String ()
+assertISAgreement :: (Show a, Eq a, Ord a, ApproxEq b, Show b, Ord b, Num b) => ITree a b -> STree a b -> Either String ()
 assertISAgreement i s =
   assertErr "Individual tree is not valid." (valid i) >>
   assertErr "Individual tree is not clock-like." (clockLike i) >>
@@ -143,7 +144,7 @@ assertISAgreement i s =
   assertIHeightsNSplits s (heightsNSplits i)
 
 -- Check if the species tree agrees with the [(Height, Split)] list.
-assertIHeightsNSplits :: (Show a, Ord a, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Either String ()
+assertIHeightsNSplits :: (Show a, Ord a, ApproxEq b, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Either String ()
 assertIHeightsNSplits s = traverse_ (assertIHeightNSplit s)
 
 -- Check the speciation at the root of the tree.
@@ -153,13 +154,13 @@ iSpeciationAgrees i s = rootNodeType i == ISCoalescent &&
                         rootNodesAgreeWith (iStateToSName . state) state i s
 
 -- Nomenclature: (S)pecies, (I)ndividual, (N)ode, (T)ype, (Tr)ree, (D)aughter
-assertIHeightNSplit :: (Show a, Ord a, Show b, Ord b, Num b)
+assertIHeightNSplit :: (Show a, Ord a, Show b, ApproxEq b, Ord b, Num b)
                    => STree a b -> (b, ITree a b) -> Either String ()
 assertIHeightNSplit s (h, i)
   -- TODO: Extinct nodes have to be shorter than extant ones.
   | iNT == ISCoalescent =
       -- Heights of speciations are equal.
-      assertErr "Heights of a speciation do not match between individual and species tree." (h  == sH) >>
+      assertErr "Heights of a speciation do not match between individual and species tree." (h  =~= sH) >>
       -- Ancestors and daughter species agree.
       assertErr "A speciation does not agree between individual and species tree " (iSpeciationAgrees i sMrcaTr) >>
       -- Force degree two node.
