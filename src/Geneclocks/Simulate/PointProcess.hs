@@ -134,7 +134,7 @@ toReconstructedTree defLabel pp@(PointProcess ps vs o)
   | length vs <= 1             = error "Too few values."
   | otherwise = if isReconstructed treeOrigin then treeOrigin else error "Error in algorithm."
   where (vsSorted, isSorted) = sort pp
-        !leaves     = [ singleton p 0 | p <- ps ]
+        !leaves     = [ singleton p 0 defaultExternal | p <- ps ]
         !heights    = replicate (length ps) 0
         !treeRoot   = toReconstructedTree' defLabel isSorted vsSorted leaves heights
         !h          = last vsSorted

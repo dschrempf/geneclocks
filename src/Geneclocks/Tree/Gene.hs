@@ -80,6 +80,8 @@ instance Show a => Show (GState a) where
   -- show (GState (GName g, i)) = wrap 'G' ++ show g ++ show i
   show (GState (GName g, i)) = 'G' : show g ++ show i
 
+-- | Create a gene tree node state from a bunch of integers (gene number,
+-- individual number and species number, respectively).
 gStateFromInts :: Int -> Int -> Int -> GState Int
 gStateFromInts g i s = GState (GName g, iStateFromInts i s)
 
@@ -169,10 +171,16 @@ assertGISAgreement :: (Show a, Eq a, Ord a, ApproxEq b, Show b, Ord b, Num b)
 assertGISAgreement g i s =
   assertErr "Gene tree not valid" (valid g) >>
   assertErr "Gene tree not clock-like." (clockLike g) >>
-  assertErr "Heights of gene and individual trees are not equal." (heightClockLike g == heightClockLike i) >>
+  assertErr "Extinction have to happen before present." (all (<= h) dXLs) >>
+  assertErr "Heights of gene and individual trees are not equal." (h == heightClockLike i) >>
   assertISAgreement i s >>
   assertErr "The root node states of the gene and individual tree do not match." (gRootNodeIState g == rootNodeState i) >>
+  assertErr "Some extant individuals of gene tree not present in individual tree." (gIs `S.isSubsetOf` iIs) >>
   assertGHeightsNSplits i (heightsNSplits g)
+  where gIs  = S.fromList $ map (gStateToIState . state) (getExtantLeaves g)
+        iIs  = S.fromList $ map state (getExtantLeaves i)
+        dXLs = distancesOriginExtinctLeaves g
+        h    = heightClockLike g
 
 -- Check if the individual tree agrees with the [(Height, Split)] list.
 assertGHeightsNSplits :: (Show a, Ord a, ApproxEq b, Show b, Ord b, Num b)
@@ -196,8 +204,7 @@ gCoalescenceAgrees g i = rootNodeType g == GICoalescent &&
 assertGHeightNSplit :: (Show a, Ord a, ApproxEq b, Show b, Ord b, Num b)
                     => ITree a b -> (b, GTree a b) -> Either String ()
 assertGHeightNSplit i (h, g)
-  -- TODO: Extinct nodes have to be shorter than extant ones.
-  | gNT == GSCoalescent  =
+  | gNT == GSCoalescent =
       -- Heights match.
       assertErr "Heights of a speciation do not match between gene and individual tree." (h =~= iH) >>
       -- Speciation agrees.
@@ -206,26 +213,29 @@ assertGHeightNSplit i (h, g)
       assertErr "The degree of a speciation node is not two." (rootDegree g == 2) >>
       -- Gene name does not change.
       assertErr "The gene name changes at a speciation event." (gRootNodeGName g `elem` map gRootNodeGName gDs)
-  | gNT == GICoalescent  =
+  | gNT == GICoalescent =
       -- Heights match.
       assertErr "Heights of coalescence do not match between gene and individual tree." (h == iH) >>
       -- Coalescece agrees.
       assertErr "A coalescence does not agree between gene and individual tree." (gCoalescenceAgrees g iMrcaTr) >>
       -- Gene names have to change.
       assertErr "Gene names do not change at a coalescence." (isPairwiseDistinct (gRootNodeGName g : gDGs))
-  | gNT == GDuplication   =
+  | gNT == GDuplication =
       -- Ancestor and daughter individuals states have to be equal.
       assertErr "Ancestor and daughter individual states have to be equal at a duplication." (isSingleton (S.insert gI gDIs)) >>
       -- Ancestor and daughter genes have to be different.
       assertErr "Ancestor and daughter genes have to be different at a duplication." (isPairwiseDistinct (gRootNodeGName g : gDGs))
-  | external gNT          = assertErr "An extant individual is present in the gene but not the individual tree." (gI `elem` map state (getLeaves i))
-  | otherwise             = error "GINodeType did not pattern match. Weird."
+  | extinct gNT = assertErr "Extinct gene in non-existant in individual tree." (isJust mIMrcaTr)
+  -- Extant leaves have been checked before.
+  | extant gNT  = pure ()
+  | otherwise   = error "GINodeType did not pattern match. Weird."
   where
     gI = gRootNodeIState g
     gNT = rootNodeType g
     gDs = subForest g
     gDIs = S.fromList $ map gRootNodeIState gDs
     gDGs = map gRootNodeGName gDs
+    mIMrcaTr = mrcaHeightNTree (S.singleton gI) i
     (iH, iMrcaTr) = fromMaybe
                     (error $ "MRCA of " ++ show gDIs ++ " not present in individual tree " ++ show i)
-                    (mrcaHeightNTree (S.singleton gI) i)
+                    mIMrcaTr

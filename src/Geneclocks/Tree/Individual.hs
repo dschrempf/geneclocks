@@ -60,9 +60,11 @@ instance Show a => Show (IState a) where
 iStateFromInts :: Int -> Int -> IState Int
 iStateFromInts i s = IState (IName i, SName s)
 
+-- | Extract 'IName' from 'IState'.
 iStateToIName :: IState a -> IName a
 iStateToIName = fst . iState
 
+-- | Extract 'SName' from 'IState'.
 iStateToSName :: IState a -> SName a
 iStateToSName  = snd . iState
 
@@ -139,9 +141,15 @@ assertISAgreement i s =
   assertErr "Individual tree is not clock-like." (clockLike i) >>
   assertErr "Species tree is not valid." (valid s) >>
   assertErr "Species tree is not clock-like." (clockLike s) >>
-  assertErr "Heights of individual and species tree are not equal." (heightClockLike i == heightClockLike s) >>
+  assertErr "Extinction have to happen before present." (all (<= h) dXLs) >>
+  assertErr "Heights of individual and species tree are not equal." (h == heightClockLike s) >>
   assertErr "Individual and species root node states do not match." (iRootNodeSName i == rootNodeState s) >>
+  assertErr "Some extant species of individual tree not present in species tree." (iSs `S.isSubsetOf` sSs) >>
   assertIHeightsNSplits s (heightsNSplits i)
+  where iSs  = S.fromList $ map (iStateToSName . state) (getExtantLeaves i)
+        sSs  = S.fromList $ map state (getExtantLeaves s)
+        dXLs = distancesOriginExtinctLeaves i
+        h    = heightClockLike i
 
 -- Check if the species tree agrees with the [(Height, Split)] list.
 assertIHeightsNSplits :: (Show a, Ord a, ApproxEq b, Show b, Ord b, Num b) => STree a b -> [(b, ITree a b)] -> Either String ()
@@ -157,7 +165,6 @@ iSpeciationAgrees i s = rootNodeType i == ISCoalescent &&
 assertIHeightNSplit :: (Show a, Ord a, Show b, ApproxEq b, Ord b, Num b)
                    => STree a b -> (b, ITree a b) -> Either String ()
 assertIHeightNSplit s (h, i)
-  -- TODO: Extinct nodes have to be shorter than extant ones.
   | iNT == ISCoalescent =
       -- Heights of speciations are equal.
       assertErr "Heights of a speciation do not match between individual and species tree." (h  =~= sH) >>
@@ -172,14 +179,17 @@ assertIHeightNSplit s (h, i)
       assertErr "Ancestor and daughter species have to be equal at a coalescence." (isSingleton (S.insert iS iDSs)) >>
       -- Ancestor and daughter individuals have to be different.
       assertErr "Ancestor and daughter individuals have to be different at a coalescence." (isPairwiseDistinct (iRootNodeIName i : iDIs))
-  | external iNT        = assertErr "An extant species is present in the individual but not the species tree." (iS `elem` map state (getLeaves s))
-  | otherwise           = error "INodeType did not pattern match. Weird."
+  | extinct iNT = assertErr "Extinct gene in non-existant in individual tree." (isJust mSMrcaTr)
+  -- Extant leaves have been checked before.
+  | extant iNT  = pure ()
+  | otherwise   = error "INodeType did not pattern match. Weird."
   where
     iS            = iRootNodeSName i
     iNT           = rootNodeType i
     iDs           = subForest i
     iDSs          = S.fromList $ map iRootNodeSName iDs
     iDIs          = map iRootNodeIName iDs
+    mSMrcaTr      = mrcaHeightNTree (S.singleton iS) s
     (sH, sMrcaTr) = fromMaybe
                     (error $ "MRCA of " ++ show iDSs ++ " not present in species tree " ++ show s)
-                    (mrcaHeightNTree (S.singleton iS) s)
+                    mSMrcaTr

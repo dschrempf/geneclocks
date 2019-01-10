@@ -59,8 +59,8 @@ speciationString = wrap 'S'
 
 instance Show SNodeType where
   show SCoalescent = speciationString
-  show SExtant      = existenceString
-  show SExtinct     = extinctionString
+  show SExtant     = existenceString
+  show SExtinct    = extinctionString
 
 -- | A species tree is a tree with 'SName's as node states, and 'SNodeType's as
 -- node types. The node state is called name. This may be subject to change.

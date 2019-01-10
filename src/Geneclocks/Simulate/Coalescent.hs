@@ -30,7 +30,7 @@ simulate :: (PrimMonad m, NodeType c)
          -> Gen (PrimState m)
          -> m (PhyloTree Int Double c)
 simulate n = simulate' n 0 trs
-  where trs = [ singleton i 0.0 | i <- [0..n-1] ]
+  where trs = [ singleton i 0.0 defaultExternal | i <- [0..n-1] ]
 
 
 simulate' :: (PrimMonad m, NodeType c)

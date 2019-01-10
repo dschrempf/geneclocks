@@ -34,12 +34,15 @@ mrcaTree3 = mrcaTree leafSet <$> tree10
 splits :: PrimMonad m => m [(Double, PhyloTree Int Double SNodeType)]
 splits = heightsNSplitsOrdered <$> tree10
 
+weirdTree :: STree Int Double
+weirdTree = Node (PhyloLabel (SName 0) 1.0 SExtinct) []
+
 performTests :: IO ()
 performTests = do
 
   announce "Simulated tree."
   tree <- tree10
-  report $ T.unpack . toNewick $ tree
+  reportText $ toNewick tree
   if valid tree
     then report "Tree is valid."
     else error "Tree should be valid."
@@ -68,5 +71,13 @@ performTests = do
   if clockLike tree
     then do
     report "Tree is clock-like."
-    report $ show (distancesRootExtantLeaves tree)
+    report $ show (distancesOriginExtantLeaves tree)
     else error "Tree should be clock-like."
+
+  announce "Check a weird tree."
+  reportText $ toNewick weirdTree
+  report $ "Height is: " ++ show (height weirdTree)
+  report $ "Distance between root and (no) extant leaves: "
+    ++ show (distancesOriginExtantLeaves weirdTree)
+  report $ "Distance between root and extinct leaves: "
+    ++ show (distancesOriginExtinctLeaves weirdTree)
