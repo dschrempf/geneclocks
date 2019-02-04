@@ -1,5 +1,5 @@
 name:                geneclocks
-version:             0.1.0.0
+version:             0.1.0.1
 github:              "dschrempf/geneclocks"
 license:             BSD3
 author:              "Dominik Schrempf"
@@ -54,7 +54,7 @@ executables:
     - -with-rtsopts=-N
     - -O2
     # Remove for production.
-    - -eventlog
+    # - -eventlog
     dependencies:
     - geneclocks
 

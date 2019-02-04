@@ -1,5 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveGeneric      #-}
 
 {- |
    Module      :  Geneclocks.Distribution.BirthDeath
@@ -28,10 +28,10 @@ module Geneclocks.Distribution.BirthDeath
   , quantile
   ) where
 
-import Data.Data (Data, Typeable)
-import GHC.Generics (Generic)
-import qualified Statistics.Distribution as D
-import Geneclocks.Distribution.Types
+import           Data.Data                     (Data, Typeable)
+import           Geneclocks.Distribution.Types
+import           GHC.Generics                  (Generic)
+import qualified Statistics.Distribution       as D
 
 -- | Distribution of the values of the point process such that it corresponds to
 -- a reconstructed tree of the birth and death process.
@@ -62,7 +62,7 @@ instance D.ContDistr BirthDeathDistribution where
 density :: BirthDeathDistribution -> Time -> Double
 density (BDD t l m) x
   | x < 0     = 0
-  | x >  t    = 0
+  | x > t     = 0
   | otherwise = d**2 * t1 * t2
   where d  = l - m
         t1 = exp (-d*x) / ((l - m*exp(-d*x))**2)
@@ -72,11 +72,12 @@ density (BDD t l m) x
 -- 'D.ContDistr'.
 quantile :: BirthDeathDistribution -> Double -> Time
 quantile (BDD t l m) p
-  | p >= 0 && p <= 1 = (-1.0/d) * log ((1.0 - p*l/t2)/(1.0 - p*m/t2))
+  | p >= 0 && p <= 1 = res
   | otherwise        =
     error $ "PointProcess.quantile: p must be in [0,1] range. Got: " ++ show p
- where d  = l - m
-       t2 = (l - m*exp(-d*t)) / (1.0 - exp(-d*t))
+ where d   = l - m
+       t2  = (l - m*exp(-d*t)) / (1.0 - exp(-d*t))
+       res = (-1.0/d) * log ((1.0 - p*l/t2)/(1.0 - p*m/t2))
 
 instance D.ContGen BirthDeathDistribution where
   genContVar = D.genContinuous

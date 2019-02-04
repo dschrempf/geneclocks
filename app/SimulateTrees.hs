@@ -14,6 +14,11 @@ Theoretical Biology, 253(4), 769–778. http://doi.org/10.1016/j.jtbi.2008.04.00
 
 TODO: lambda ~ mu.
 
+Mon Feb 4 14:26:11 CET 2019: Adding sampling probability rho. See Article
+(Stadler2009) Stadler, T. On incomplete sampling under birth–death models and
+connections to the sampling-based coalescent Journal of Theoretical Biology,
+Elsevier BV, 2009, 261, 58-66
+
 -}
 
 module Main where
@@ -27,6 +32,7 @@ import           Data.Semigroup                   ((<>))
 import qualified Data.Text                        as T
 import qualified Data.Text.IO                     as T
 import           Data.Vector                      (singleton)
+import           Data.Version                     (showVersion)
 import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree, simulateReconstructedTreeRandomHeight)
 import           Geneclocks.Tree.Phylo            (PhyloTree)
 import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
@@ -34,6 +40,7 @@ import           Geneclocks.Tree.PhyloSumStat     (formatNChildSumStat,
                                                    toNChildSumStat)
 import           Geneclocks.Tree.Species          (SNodeType)
 import           Options.Applicative
+import           Paths_geneclocks                 (version)
 import qualified System.Environment               as Sys
 import           System.Random.MWC
 import qualified Text.PrettyPrint.ANSI.Leijen     as Doc
@@ -44,6 +51,7 @@ data Args = Args
   , height    :: Maybe Double -- ^ Tree height (time to origin).
   , lambda    :: Double -- ^ Birth rate.
   , mu        :: Double -- ^ Death rate.
+  , rho       :: Double -- ^ Smapling rate.
   , sumStat   :: Bool   -- ^ Only print summary statistics?
   , verbosity :: Bool   -- ^ Verbosity.
   , quiet     :: Bool   -- ^ Be quiet?
@@ -57,6 +65,7 @@ reportArgs a =
           , "Height of trees: " ++ hStr
           , "Birth rate: " ++ show (lambda a)
           , "Death rate: " ++ show (mu a)
+          , "Sampling rate: " ++ show (rho a)
           , "Summary statistics only: " ++ show (sumStat a)
           , "Verbosity: " ++ show (verbosity a)
           , "Quiet: " ++ show (quiet a)
@@ -92,6 +101,7 @@ argsParser = Args
   <*> treeHeightOpt
   <*> lambdaOpt
   <*> muOpt
+  <*> rhoOpt
   <*> sumStatOpt
   <*> verbosityOpt
   <*> quietOpt
@@ -141,6 +151,14 @@ muOpt = option auto
     <> showDefault
     <> help "Death rate mu" )
 
+rhoOpt :: Parser Double
+rhoOpt = option auto
+  ( long "rho"
+    <> short 'r'
+    <> metavar "DOUBLE"
+    <> value 1.0
+    <> help "Sampling rate rho (default: 1.0)" )
+
 sumStatOpt :: Parser Bool
 sumStatOpt = switch
   ( long "summary-statistics"
@@ -171,7 +189,7 @@ seedOpt = optional $ option auto
 
 getCommandLineStr :: String -> [String] -> String
 getCommandLineStr n as = unlines
-  [ "Reconstructed trees simulator version 0.1.0.0."
+  [ "Reconstructed trees simulator version " ++ showVersion version ++ "."
   , "Command line: " ++ n ++ " " ++ unwords as ]
 
 newSection :: String -> String
@@ -201,9 +219,14 @@ main = do
   T.putStr $ T.unlines ls
 
 simulateNTreesConcurrently :: Int -> Args -> IO [PhyloTree Int Double SNodeType]
-simulateNTreesConcurrently c (Args t n h l m _ v _ s) = do
-  trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l m v s)
-  trsRem <- simulateNTrees (t `mod` c) n h l m v s
+simulateNTreesConcurrently c (Args t n h l m r _ v _ s) = do
+  -- when (l <= 0) (error "Speciation rate has to be larger than zero.")
+  -- when (m <= 0) (error "Extinction rate has to be larger than zero.")
+  -- when ((r <= 0) || (r > 1)) (error "Sampling rate has to in (0,1].")
+  let l' = l * r
+      m' = m - l * (1.0 - r)
+  trsCon <- replicateConcurrently c (simulateNTrees (t `div` c) n h l' m' v s)
+  trsRem <- simulateNTrees (t `mod` c) n h l' m' v s
   return $ concat trsCon ++ trsRem
 
 simulateNTrees :: Int -> Int -> Maybe Double -> Double -> Double -> Bool

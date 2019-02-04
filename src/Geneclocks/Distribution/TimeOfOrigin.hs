@@ -70,12 +70,12 @@ density (TOD nn l m) x
 -- | The inverted cumulative probability distribution 'cumulative'. See also
 -- 'D.ContDistr'.
 quantile :: TimeOfOriginDistribution -> Double -> Time
-quantile (TOD nn l m) p
+quantile (TOD n' l m) p
   | p >= 0 && p <= 1 = -1.0/d * log(t1/t2)
   | otherwise        =
     error $ "PointProcess.quantile: p must be in [0,1] range. Got: " ++ show p
  where d  = l - m
-       n  = fromIntegral nn
+       n  = fromIntegral n'
        t1 = l*(1.0-p**(1.0/n))
        t2 = l - p**(1.0/n)*m
 
