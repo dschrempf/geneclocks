@@ -71,7 +71,7 @@ import           Control.DeepSeq        (NFData)
 import           Data.Foldable
 import           Data.Function          (on)
 import           Data.List
-import           Data.Monoid
+-- import           Data.Monoid
 import qualified Data.Set               as S
 import qualified Data.Text.Lazy.Builder as B
 import           Data.Tree

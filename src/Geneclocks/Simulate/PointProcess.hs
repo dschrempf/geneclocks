@@ -98,7 +98,10 @@ simulateReconstructedTreeRandomHeight
   -> DeathRate        -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
   -> m (PhyloTree Int Double c)
-simulateReconstructedTreeRandomHeight n l m g = do
+simulateReconstructedTreeRandomHeight n l m g
+  -- TODO: Investigate.
+  | m > l     = error "Time of origin distribution formula is wrong when mu > lambda. Please specify height for the moment."
+  | otherwise = do
   t <- D.genContVar (TOD n l m) g
   simulateReconstructedTree n t l m g
 

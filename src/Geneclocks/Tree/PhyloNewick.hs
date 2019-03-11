@@ -19,7 +19,7 @@ module Geneclocks.Tree.PhyloNewick
   ) where
 
 import           Data.List                  (intersperse)
-import           Data.Monoid
+-- import           Data.Monoid
 import qualified Data.Text                  as T
 import qualified Data.Text.Lazy             as T (toStrict)
 import qualified Data.Text.Lazy.Builder     as B
