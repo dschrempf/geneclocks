@@ -36,9 +36,9 @@ import Geneclocks.Distribution.Types
 -- | Distribution of the time of origin for a phylogenetic tree evolving under
 -- the birth and death process and conditioned on observing n leaves today.
 data TimeOfOriginDistribution = TOD
-  { todTN :: Int                -- ^ Number of leaves of the tree.
-  , todLa :: BirthRate          -- ^ Birth rate.
-  , todMu :: DeathRate          -- ^ Death rate.
+  { todTN :: Int           -- ^ Number of leaves of the tree.
+  , todLa :: Rate          -- ^ Birth rate.
+  , todMu :: Rate          -- ^ Death rate.
   } deriving (Eq, Typeable, Data, Generic)
 
 instance D.Distribution TimeOfOriginDistribution where

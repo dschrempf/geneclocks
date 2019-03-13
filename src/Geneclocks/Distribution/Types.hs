@@ -15,16 +15,13 @@ Creation date: Wed May 16 12:21:57 2018.
 
 module Geneclocks.Distribution.Types
   ( Time
-  , BirthRate
-  , DeathRate
+  , Rate
   ) where
 
 -- | Branch lengths are measured in time.
 type Time = Double
 
--- | Birth rate.
-type BirthRate = Double
+-- | Birth or death rates.
+type Rate = Double
 
--- | Death rate.
-type DeathRate = Double
 

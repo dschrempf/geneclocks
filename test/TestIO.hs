@@ -5,7 +5,6 @@ module TestIO
   , reportDoc
   ) where
 
-import           Data.Monoid
 import qualified Data.Text                    as T
 import qualified Data.Text.IO                 as T
 import qualified Text.PrettyPrint.ANSI.Leijen as Pp

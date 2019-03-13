@@ -35,6 +35,8 @@ import           Control.Monad
 import           Control.Monad.Primitive
 import           Data.List                            (mapAccumL)
 import           Geneclocks.Distribution.BirthDeath
+import           Geneclocks.Distribution.BirthDeathCritical
+import           Geneclocks.Distribution.BirthDeathNearlyCritical
 import           Geneclocks.Distribution.TimeOfOrigin
 import           Geneclocks.Distribution.Types
 import           Geneclocks.Tools
@@ -56,10 +58,10 @@ data PointProcess a b = PointProcess
 -- | Sample a point process using the 'BirthDeathDistribution'. The names of the
 -- points will be integers.
 simulate :: (PrimMonad m)
-         => Int             -- ^ Number of points (samples)
-         -> Time            -- ^ Time of origin
-         -> BirthRate       -- ^ Birth rate
-         -> DeathRate       -- ^ Death rate
+         => Int        -- ^ Number of points (samples)
+         -> Time       -- ^ Time of origin
+         -> Rate       -- ^ Birth rate
+         -> Rate       -- ^ Death rate
          -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
          -> m (PointProcess Int Double)
 simulate n t l m g
@@ -67,6 +69,12 @@ simulate n t l m g
   | t < 0.0   = error "Time of origin needs to be positive."
   | l < 0.0   = error "Birth rate needs to be positive."
   | m < 0.0   = error "Death rate needs to be positive."
+  | m =~= l   = do
+      !vs <- replicateM (n-1) (D.genContVar (BDCD t l) g)
+      return $ PointProcess [0..(n-1)] vs t
+  | abs (m - l) <= 1e-5 = do
+      !vs <- replicateM (n-1) (D.genContVar (BDNCD t l m) g)
+      return $ PointProcess [0..(n-1)] vs t
   | otherwise = do
   !vs <- replicateM (n-1) (D.genContVar (BDD t l m) g)
   return $ PointProcess [0..(n-1)] vs t
@@ -93,14 +101,14 @@ fAcc is i = (i:is, i')
 -- expected distribution. See 'TOD.TimeOfOriginDistribution'.
 simulateReconstructedTreeRandomHeight
   :: (PrimMonad m, NodeType c)
-  => Int              -- ^ Number of points (samples)
-  -> BirthRate        -- ^ Birth rate
-  -> DeathRate        -- ^ Death rate
+  => Int         -- ^ Number of points (samples)
+  -> Rate        -- ^ Birth rate
+  -> Rate        -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
   -> m (PhyloTree Int Double c)
 simulateReconstructedTreeRandomHeight n l m g
-  -- TODO: Investigate.
-  | m > l     = error "Time of origin distribution formula is wrong when mu > lambda. Please specify height for the moment."
+  -- TODO.
+  | m >= l     = error "Time of origin distribution formula not available when mu >= lambda. Please specify height for the moment."
   | otherwise = do
   t <- D.genContVar (TOD n l m) g
   simulateReconstructedTree n t l m g
@@ -110,10 +118,10 @@ simulateReconstructedTreeRandomHeight n l m g
 -- the birth and death process.
 simulateReconstructedTree
   :: (PrimMonad m, NodeType c)
-  => Int             -- ^ Number of points (samples)
-  -> Time            -- ^ Time of origin
-  -> BirthRate       -- ^ Birth rate
-  -> DeathRate       -- ^ Death rate
+  => Int        -- ^ Number of points (samples)
+  -> Time       -- ^ Time of origin
+  -> Rate       -- ^ Birth rate
+  -> Rate       -- ^ Death rate
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
   -> m (PhyloTree Int Double c)
 simulateReconstructedTree n t l m g =  toReconstructedTree 0 <$> simulate n t l m g
