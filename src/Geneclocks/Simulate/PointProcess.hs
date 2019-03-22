@@ -59,6 +59,7 @@ data PointProcess a b = PointProcess
 -- points will be integers.
 simulate :: (PrimMonad m)
          => Int        -- ^ Number of points (samples)
+         -- XXX: Also here, Maybe Time.
          -> Time       -- ^ Time of origin
          -> Rate       -- ^ Birth rate
          -> Rate       -- ^ Death rate
@@ -68,7 +69,7 @@ simulate n t l m g
   | n < 1     = error "Number of samples needs to be one or larger."
   | t < 0.0   = error "Time of origin needs to be positive."
   | l < 0.0   = error "Birth rate needs to be positive."
-  | m < 0.0   = error "Death rate needs to be positive."
+  -- | m < 0.0   = error "Death rate needs to be positive."
   | m =~= l   = do
       !vs <- replicateM (n-1) (D.genContVar (BDCD t l) g)
       return $ PointProcess [0..(n-1)] vs t
@@ -107,7 +108,11 @@ simulateReconstructedTreeRandomHeight
   -> Gen (PrimState m)   -- ^ Generator (see 'System.Random.MWC')
   -> m (PhyloTree Int Double c)
 simulateReconstructedTreeRandomHeight n l m g
-  -- TODO.
+  -- TODO. Find formula for m>l.
+
+  -- TODO. BDCD with unknown time of origin (t cancels out in density). Probably
+  -- use Maybe Double for t?
+
   | m >= l     = error "Time of origin distribution formula not available when mu >= lambda. Please specify height for the moment."
   | otherwise = do
   t <- D.genContVar (TOD n l m) g
@@ -119,6 +124,7 @@ simulateReconstructedTreeRandomHeight n l m g
 simulateReconstructedTree
   :: (PrimMonad m, NodeType c)
   => Int        -- ^ Number of points (samples)
+  -- XXX: Here use Maybe Time.
   -> Time       -- ^ Time of origin
   -> Rate       -- ^ Birth rate
   -> Rate       -- ^ Death rate

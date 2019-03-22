@@ -1,8 +1,13 @@
 .stack-work/
+.stack-work-production/
+
 geneclocks.cabal
+
 *~
+
 /TAGS
-/simulate-trees.*
 /GPATH
 /GRTAGS
 /GTAGS
+
+/simulate-trees.*
