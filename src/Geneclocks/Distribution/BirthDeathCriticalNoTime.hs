@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric      #-}
 
 {- |
-   Module      :  Geneclocks.Distribution.BirthDeathCritialNoTime
+   Module      :  Geneclocks.Distribution.BirthDeathCriticalNoTime
    Description :  Birth and death distribution
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -22,7 +22,7 @@ process with lambda=mu.
 
 -}
 
-module Geneclocks.Distribution.BirthDeathCritialNoTime
+module Geneclocks.Distribution.BirthDeathCriticalNoTime
   ( BirthDeathCriticalNoTimeDistribution(..)
   , cumulative
   , density
@@ -47,7 +47,7 @@ instance D.Distribution BirthDeathCriticalNoTimeDistribution where
 cumulative :: BirthDeathCriticalNoTimeDistribution -> Time -> Double
 cumulative (BDCNTD l) x
   | x <= 0    = 0
-  | otherwise = x * l / (1.0 + l * x)
+  | otherwise = x * l / (1.0 + x * l)
 
 instance D.ContDistr BirthDeathCriticalNoTimeDistribution where
   density  = density
@@ -58,7 +58,7 @@ instance D.ContDistr BirthDeathCriticalNoTimeDistribution where
 density :: BirthDeathCriticalNoTimeDistribution -> Time -> Double
 density (BDCNTD l) x
   | x < 0     = 0
-  | otherwise = l / ((1.0 + l * x)**2)
+  | otherwise = l / ((1.0 + x * l)**2)
 
 -- | Inverted cumulative probability distribution 'cumulative'. See also
 -- 'D.ContDistr'.

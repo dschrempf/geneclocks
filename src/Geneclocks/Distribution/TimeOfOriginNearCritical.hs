@@ -2,7 +2,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 
 {- |
-   Module      :  Geneclocks.Distribution.TimeOfOrigin
+   Module      :  Geneclocks.Distribution.TimeOfOriginNearCritical
    Description :  Distribution of time of origin for birth and death trees
    Copyright   :  (c) Dominik Schrempf 2018
    License     :  GPL-3
@@ -21,8 +21,8 @@ in the paper cited above.
 
 -}
 
-module Geneclocks.Distribution.TimeOfOrigin
-  ( TimeOfOriginDistribution(..)
+module Geneclocks.Distribution.TimeOfOriginNearCritical
+  ( TimeOfOriginNearCriticalDistribution(..)
   , cumulative
   , density
   , quantile
@@ -35,49 +35,49 @@ import Geneclocks.Distribution.Types
 
 -- | Distribution of the time of origin for a phylogenetic tree evolving under
 -- the birth and death process and conditioned on observing n leaves today.
-data TimeOfOriginDistribution = TOD
+data TimeOfOriginNearCriticalDistribution = TONCD
   { todTN :: Int           -- ^ Number of leaves of the tree.
   , todLa :: Rate          -- ^ Birth rate.
   , todMu :: Rate          -- ^ Death rate.
   } deriving (Eq, Typeable, Data, Generic)
 
-instance D.Distribution TimeOfOriginDistribution where
+instance D.Distribution TimeOfOriginNearCriticalDistribution where
     cumulative = cumulative
 
--- | Cumulative distribution function Corollary 3.3.
-cumulative :: TimeOfOriginDistribution -> Time -> Double
-cumulative (TOD n l m) x
-  | x <= 0    = 0
-  | otherwise = te ** fromIntegral n
+-- | Cumulative distribution function; see Mathematica notebook.
+cumulative :: TimeOfOriginNearCriticalDistribution -> Time -> Double
+cumulative (TONCD n' l m) t
+  | t <= 0    = 0
+  | otherwise = t1 + t2
   where d  = l - m
-        te = l * (1.0 - exp (-d*x)) / (l - m*exp(-d*x))
+        n  = fromIntegral n'
+        t1 = (t*l/(1.0 + t*l)) ** n
+        t2 = (n * t * t1) * d / (2.0 * (1.0 + t*l))
 
-instance D.ContDistr TimeOfOriginDistribution where
+instance D.ContDistr TimeOfOriginNearCriticalDistribution where
   density  = density
   quantile = quantile
 
 -- | The density function Eq. (5).
-density :: TimeOfOriginDistribution -> Time -> Double
-density (TOD nn l m) x
-  | x < 0     = 0
-  | otherwise = n * l**n * d**2 * t1**(n-1.0) * ex / (t2**(n+1.0))
-  where d  = l - m
-        n  = fromIntegral nn
-        ex = exp(-d*x)
-        t1 = 1.0 - ex
-        t2 = l - m*ex
+density :: TimeOfOriginNearCriticalDistribution -> Time -> Double
+density (TONCD n' l m) t
+  | t < 0     = 0
+  | otherwise = nom/den
+  where n  = fromIntegral n'
+        nom = n * (t*l/(1+t*l))**n * (2+(3+n)*t*l - (1+n)*t*m)
+        den = 2*t*(1+t*l)**2
 
 -- | The inverted cumulative probability distribution 'cumulative'. See also
 -- 'D.ContDistr'.
-quantile :: TimeOfOriginDistribution -> Double -> Time
-quantile (TOD n' l m) p
-  | p >= 0 && p <= 1 = -1.0/d * log(t1/t2)
+quantile :: TimeOfOriginNearCriticalDistribution -> Double -> Time
+quantile (TONCD n' l m) p
+  | p >= 0 && p <= 1 = t1 + t2nom/t2den
   | otherwise        =
     error $ "PointProcess.quantile: p must be in [0,1] range. Got: " ++ show p
- where d  = l - m
-       n  = fromIntegral n'
-       t1 = l*(1.0-p**(1.0/n))
-       t2 = l - p**(1.0/n)*m
+  where n = fromIntegral n'
+        t1 = - p**(1/n)/((-1+p**(1/n))*l)
+        t2nom = p**(2/n)*(m-l)
+        t2den = 2*(-1+p**(1/n))**2 * l**2
 
-instance D.ContGen TimeOfOriginDistribution where
+instance D.ContGen TimeOfOriginNearCriticalDistribution where
   genContVar = D.genContinuous
