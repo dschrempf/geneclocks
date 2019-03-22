@@ -33,7 +33,7 @@ import qualified Data.Text                        as T
 import qualified Data.Text.IO                     as T
 import           Data.Vector                      (singleton)
 import           Data.Version                     (showVersion)
-import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree, simulateReconstructedTreeRandomHeight)
+import           Geneclocks.Simulate.PointProcess (simulateReconstructedTree)
 import           Geneclocks.Tree.Phylo            (PhyloTree)
 import           Geneclocks.Tree.PhyloNewick      (toNewickIntegral)
 import           Geneclocks.Tree.PhyloSumStat     (formatNChildSumStat,
@@ -237,9 +237,7 @@ simulateNTrees t n mH l m v s
   | otherwise = do
       when v reportCapability
       g <- maybe createSystemRandom (initialize . singleton . fromIntegral) s
-      let f = case mH of
-            Nothing -> simulateReconstructedTreeRandomHeight n l m g
-            Just h  -> simulateReconstructedTree n h l m g
+      let f = simulateReconstructedTree n mH l m g
       replicateM t f
 
 -- simulateNBranchLengthNChildrenConcurrently :: Int -> Args -> IO T.Text
